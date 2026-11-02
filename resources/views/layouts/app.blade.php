@@ -2,6 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-QMNVZ74N60"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-QMNVZ74N60');
+    </script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>@yield('title', 'Ravi Exclusive — Shop Ethnic & Designer Wear Online | Amritsar')</title>
   <meta name="description" content="@yield('description')">
