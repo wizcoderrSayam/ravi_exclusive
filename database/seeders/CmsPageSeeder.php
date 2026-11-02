@@ -16,7 +16,7 @@ use Illuminate\Database\Seeder;
  */
 class CmsPageSeeder extends Seeder
 {
-    private const ADDRESS = 'M/s Ravi Exclusive,  22, Katra Jaimal Singh, Amritsar, Amritsar, Punjab, India – 143001';
+    private const ADDRESS = 'M/s Ravi Exclusif,  22, Katra Jaimal Singh, Amritsar, Amritsar, Punjab, India – 143001';
 
     private const PHONE = '+91-814-814-62-62';
 
