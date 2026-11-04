@@ -23,7 +23,7 @@ class StorefrontController extends Controller
     private const HOME_SECTION_SIZE = 4;
 
     /** Top-level categories with their own listing page, each routed as "shop.{slug}". */
-    private const CATEGORY_PAGES = ['girls', 'boys', 'men', 'women'];
+    public const CATEGORY_PAGES = ['girls', 'boys', 'men', 'women'];
 
     /** How many products from the same subcategory a product page suggests. */
     private const RELATED_PRODUCTS = 4;

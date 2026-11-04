@@ -12,48 +12,20 @@
         </div>
         <nav class="col-auto d-none d-lg-block mainnav" aria-label="Main">
           <ul id="mega">
-            <li>
-              <a href="{{ route('shop.girls') }}"@if (request()->routeIs('shop.girls')) class="active"@endif>Girls</a>
-              <div class="drop">
-                <h4>Girls</h4>
-                <a href="{{ route('shop.girls') }}#lehenga">Lehenga</a>
-                <a href="{{ route('shop.girls') }}#sharara-palazzo">Sharara / Palazzo</a>
-                <a href="{{ route('shop.girls') }}#patiala-farshi-salwar">Patiala Salwar Suits / Farshi Salwar</a>
-                <a href="{{ route('shop.girls') }}#frocks-gowns">Frocks &amp; Gowns</a>
-                <a class="all" href="{{ route('shop.girls') }}">Shop all Girls →</a>
-              </div>
-            </li>
-            <li>
-              <a href="{{ route('shop.boys') }}"@if (request()->routeIs('shop.boys')) class="active"@endif>Boys</a>
-              <div class="drop">
-                <h4>Boys</h4>
-                <a href="{{ route('shop.boys') }}#sherwani">Sherwani</a>
-                <a href="{{ route('shop.boys') }}#indo-westerns">Indo-Westerns</a>
-                <a href="{{ route('shop.boys') }}#coat-suits-tuxedos">Coat Suits / Tuxedos</a>
-                <a href="{{ route('shop.boys') }}#jodhpuri">Jodhpuri</a>
-                <a href="{{ route('shop.boys') }}#kurta-pajama">Kurta Pajama</a>
-                <a href="{{ route('shop.boys') }}#waistcoat-sets">Waistcoat Sets</a>
-                <a class="all" href="{{ route('shop.boys') }}">Shop all Boys →</a>
-              </div>
-            </li>
-            <li>
-              <a href="{{ route('shop.men') }}"@if (request()->routeIs('shop.men')) class="active"@endif>Men</a>
-              <div class="drop">
-                <h4>Men</h4>
-                <a href="{{ route('shop.men') }}#kurta-pajamas">Kurta Pajamas</a>
-                <a href="{{ route('shop.men') }}#waistcoat-sets">Waistcoat Sets</a>
-                <a href="{{ route('shop.men') }}#indo-westerns">Indo-Westerns</a>
-                <a class="all" href="{{ route('shop.men') }}">Shop all Men →</a>
-              </div>
-            </li>
-            <li>
-              <a href="{{ route('shop.women') }}"@if (request()->routeIs('shop.women')) class="active"@endif>Women</a>
-              <div class="drop">
-                <h4>Women</h4>
-                <a href="{{ route('shop.women') }}#co-ord-sets">Co-ord Sets</a>
-                <a class="all" href="{{ route('shop.women') }}">Shop all Women →</a>
-              </div>
-            </li>
+            @foreach ($menuCategories as $menuCategory)
+              <li>
+                <a href="{{ $menuCategory['url'] }}"@if (request()->routeIs($menuCategory['routeName'])) class="active"@endif>{{ $menuCategory['name'] }}</a>
+                @if ($menuCategory['links'] !== [])
+                  <div class="drop">
+                    <h4>{{ $menuCategory['name'] }}</h4>
+                    @foreach ($menuCategory['links'] as $link)
+                      <a href="{{ $link['url'] }}">{{ $link['name'] }}</a>
+                    @endforeach
+                    <a class="all" href="{{ $menuCategory['url'] }}">Shop all {{ $menuCategory['name'] }} →</a>
+                  </div>
+                @endif
+              </li>
+            @endforeach
             <li><a href="{{ route('shop.new-arrivals') }}"@if (request()->routeIs('shop.new-arrivals')) class="active"@endif>New Arrivals</a></li>
           </ul>
         </nav>
