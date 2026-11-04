@@ -34,7 +34,7 @@
       <div class="row row-cols-2 row-cols-md-3 row-cols-xl-4 g-3 g-md-4 product-grid" id="plist">
         @include('partials.product-grid', ['products' => $products])
       </div>
-      <div class="empty" id="emptyMsg" @if ($products->isNotEmpty()) hidden @endif>New ones coming soon. Stay tuned. 😊.</div>
+      <div class="empty" id="emptyMsg" @if ($products->isNotEmpty()) hidden @endif>New ones coming soon. Stay tuned. 😊</div>
       <nav class="pager" id="pager" aria-label="Product pages" hidden></nav>
     </div>
   </div>
