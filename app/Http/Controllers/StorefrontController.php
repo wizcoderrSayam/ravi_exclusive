@@ -223,14 +223,11 @@ class StorefrontController extends Controller
     private function newArrivalsQuery(): Builder
     {
         return $this->productQuery()
-            ->where('created_at', '>=', now()->subDays(self::NEW_ARRIVAL_DAYS))
-            ->reorder()
-            ->latest()
-            ->orderBy('id');
+            ->where('created_at', '>=', now()->subDays(self::NEW_ARRIVAL_DAYS));
     }
 
     /**
-     * Active products in active categories, with what a product card needs, in catalogue order.
+     * Active products in active categories, with what a product card needs, newest first.
      *
      * @return Builder<Product>
      */
@@ -244,6 +241,7 @@ class StorefrontController extends Controller
                 'images',
                 'variants' => fn ($variants) => $variants->orderBy('id'),
             ])
-            ->orderBy('id');
+            ->latest()
+            ->orderByDesc('id');
     }
 }

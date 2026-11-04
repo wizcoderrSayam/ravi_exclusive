@@ -39,7 +39,8 @@ class AppServiceProvider extends ServiceProvider
             ->active()
             ->whereHas('category', fn (Builder $category) => $category->active())
             ->with(['category.parent', 'images', 'variants' => fn ($variants) => $variants->orderBy('id')])
-            ->orderBy('id')
+            ->latest()
+            ->orderByDesc('id')
             ->get()
             ->map(function (Product $product): array {
                 $card = new ProductCard($product);
