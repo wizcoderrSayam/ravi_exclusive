@@ -9,7 +9,7 @@
   /* ---------- STORE SETTINGS — edit these ---------- */
   const STORE = {
     name: "Ravi Exclusive",
-    whatsapp: document.body.dataset.whatsapp // used for checkout orders, set under CMS > Settings > General
+    whatsapp: document.body.dataset.whatsapp // used for checkout orders, set on <body> in layouts/app.blade.php
   };
 
   /* ---------- helpers ---------- */

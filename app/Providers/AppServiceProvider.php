@@ -23,9 +23,7 @@ class AppServiceProvider extends ServiceProvider
     {
         // Scoped rather than once(): long-lived workers must rebuild the menu for each request or job.
         $this->app->scoped('storefront.menu', fn (): array => $this->menuCategories());
-        $this->app->scoped('storefront.whatsapp', fn (): StoreWhatsApp => new StoreWhatsApp(
-            (string) $this->app->make(SettingsRepository::class)->get('general.whatsapp_number', StoreWhatsApp::ORIGINAL_NUMBER)
-        ));
+        $this->app->scoped('storefront.whatsapp', fn (): StoreWhatsApp => new StoreWhatsApp(StoreWhatsApp::CURRENT_NUMBER));
     }
 
     /**
@@ -42,7 +40,7 @@ class AppServiceProvider extends ServiceProvider
                 'type' => 'text',
                 'default' => StoreWhatsApp::ORIGINAL_NUMBER,
                 'placeholder' => '+91 98765 43210',
-                'help' => 'Include the country code. Customers see this number on the shop, and their WhatsApp orders go to it.',
+                'help' => 'Not in use right now: the shop\'s number is fixed in the code, so changing this has no effect.',
                 'rules' => ['required', 'regex:/^\+\d(?:[ -]?\d){7,14}\z/'],
             ],
         ]);
@@ -52,11 +50,6 @@ class AppServiceProvider extends ServiceProvider
 
         // The desktop mega menu and the mobile menu list the same categories, so both share one query per request.
         View::composer(['partials.header', 'partials.mobile-nav'], fn ($view) => $view->with('menuCategories', $this->app->make('storefront.menu')));
-
-        View::composer(
-            ['layouts.app', 'partials.header', 'partials.mobile-nav', 'partials.footer', 'shop.home', 'shop.product'],
-            fn ($view) => $view->with('storeWhatsApp', $this->app->make('storefront.whatsapp'))
-        );
     }
 
     /**

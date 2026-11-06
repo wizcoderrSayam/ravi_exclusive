@@ -26,7 +26,8 @@ class StoreContentSeedersTest extends TestCase
         );
         $this->assertStringContainsString(' 22, Katra Jaimal Singh, Amritsar', Page::firstWhere('slug', 'contact-us')->html);
         $this->assertStringContainsString('Orders above ₹999 ship free', Page::firstWhere('slug', 'shipping-policy')->html);
-        $this->assertStringContainsString('href="tel:+918148146262"', Page::firstWhere('slug', 'contact-us')->html);
+        $this->assertStringContainsString('href="tel:+919915018282"', Page::firstWhere('slug', 'contact-us')->html);
+        $this->assertStringContainsString('href="https://wa.me/919915018282"', Page::firstWhere('slug', 'contact-us')->html);
     }
 
     public function test_cms_page_seeder_keeps_edits_made_in_the_cms(): void

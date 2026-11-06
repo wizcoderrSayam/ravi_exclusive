@@ -65,7 +65,7 @@ class AdminStoreWhatsAppNumberTest extends TestCase
         ];
     }
 
-    public function test_the_storefront_uses_the_saved_number_everywhere(): void
+    public function test_the_storefront_uses_the_fixed_number_everywhere_whatever_the_setting_says(): void
     {
         Storage::fake(config('cms.media.disk'));
         $this->seed(RaviProductListSeeder::class);
@@ -76,20 +76,22 @@ class AdminStoreWhatsAppNumberTest extends TestCase
 
         $home = $this->get(route('shop.home'));
         $home->assertOk();
-        $home->assertSee('data-whatsapp="447700900123"', false);
-        $home->assertSee('href="https://wa.me/447700900123"', false);
-        $home->assertSee('class="wa-float" href="https://wa.me/447700900123?text=', false);
-        $home->assertSee('href="tel:+447700900123"', false);
-        $home->assertSee('+44 7700 900123');
+        $home->assertSee('data-whatsapp="919915018282"', false);
+        $home->assertSee('href="https://wa.me/919915018282"', false);
+        $home->assertSee('class="wa-float" href="https://wa.me/919915018282?text=', false);
+        $home->assertSee('href="tel:+919915018282"', false);
+        $home->assertSee('+91 99150 18282');
         $home->assertDontSee('8148146262');
         $home->assertDontSee(StoreWhatsApp::ORIGINAL_NUMBER);
+        $home->assertDontSee('447700900123');
 
         $productPage = $this->get(route('shop.product', $product->slug));
         $productPage->assertOk();
-        $productPage->assertSee('<a href="tel:+447700900123" class="text-red">+44 7700 900123</a>', false);
-        $productPage->assertSee('WhatsApp us on +44 7700 900123');
+        $productPage->assertSee('<a href="tel:+919915018282" class="text-red">+91 99150 18282</a>', false);
+        $productPage->assertSee('WhatsApp us on +91 99150 18282');
         $productPage->assertDontSee('8148146262');
         $productPage->assertDontSee(StoreWhatsApp::ORIGINAL_NUMBER);
+        $productPage->assertDontSee('447700900123');
     }
 
     private function admin(): User
