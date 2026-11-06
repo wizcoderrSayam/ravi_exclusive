@@ -103,11 +103,6 @@
         "type": "git",
         "url": "git@github.com:carepeerinfotech/ecommerce.git",
         "no-api": true
-    },
-    {
-        "type": "git",
-        "url": "git@github.com:carepeerinfotech/cms.git",
-        "no-api": true
     }
 ]
 }
