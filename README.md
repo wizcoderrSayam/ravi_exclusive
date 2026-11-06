@@ -9,14 +9,32 @@
 
 ## Installation & Deployment
 
-The ecommerce admin panel lives in a separate repository, [`carepeerinfotech/ecommerce`](https://github.com/carepeerinfotech/ecommerce). It is included here as a **git submodule** at `packages/ecommerce` and loaded by Composer as a `path` repository.
+The store runs on two private packages, which Composer installs over SSH at the commits `composer.lock` records:
 
-A plain `git clone` or `git pull` does **not** download submodule code. If `packages/ecommerce` is empty, `composer install` fails with:
+- [`carepeerinfotech/ecommerce`](https://github.com/carepeerinfotech/ecommerce): the admin at `/admin`, the catalog, orders and shipping.
+- [`carepeerinfotech/cms`](https://github.com/carepeerinfotech/cms): the panel at `/cms`, categories, the media library and settings, including the store's WhatsApp number (**Settings → General**).
 
+`packages/ecommerce` is a **git submodule** for working on the package; the running app uses the copy in `vendor/`. To change the package, commit and push it first, then run `composer update carepeerinfotech/ecommerce` so the lock records the new commit. Deploys only run `composer install`, so a change that isn't in the lock doesn't reach the server.
+
+Staff sign in at `/admin/login`. Uploads go to `public/media`, which must be writable and backed up.
+
+### Moving a store from the old `legacy` line
+
+The old store's database can't be migrated in place, because the CMS's tables clash with its own, and a migration refuses to run on it. Copy the store into a new database instead. On the old store's server:
+
+```bash
+php packages/ecommerce/bin/export-legacy.php /path/to/old-app store.zip --url=https://the-live-site
 ```
-Class "Carepeerinfotech\Ecommerce\EcommerceServiceProvider" not found
-Script @php artisan package:discover --ansi handling the post-autoload-dump event returned with error code 1
+
+Then, with `DB_DATABASE` pointing at a new, empty database:
+
+```bash
+php artisan migrate --force
+php artisan db:seed --class="Peer\Ecommerce\Database\Seeders\EcommerceSeeder"
+php artisan ecommerce:import-legacy store.zip
 ```
+
+The zip holds the old `.env` and every customer, so keep it out of web folders and delete it afterwards. Don't run the full `db:seed` on a store with real data: it resets the seeded products' prices and stock.
 
 ### Fresh clone
 

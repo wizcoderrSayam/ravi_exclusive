@@ -3,10 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\User;
-use Carepeerinfotech\Ecommerce\Database\Seeders\EcommerceSeeder;
-use Carepeerinfotech\Ecommerce\Models\Role;
-use Carepeerinfotech\Ecommerce\Services\Backup\BackupRestorer;
 use Illuminate\Filesystem\Filesystem;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Process\PendingProcess;
@@ -14,6 +12,9 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
+use Peer\Ecommerce\Database\Seeders\EcommerceSeeder;
+use Peer\Ecommerce\Models\Role;
+use Peer\Ecommerce\Services\Backup\BackupRestorer;
 use Tests\TestCase;
 use ZipArchive;
 
@@ -26,7 +27,7 @@ class AdminDevToolsTest extends TestCase
         parent::setUp();
 
         Storage::fake('local');
-        Storage::fake('public');
+        Storage::fake(config('cms.media.disk'));
 
         // Tests run on sqlite; point the backups at the mysql connection and fake the binaries.
         config(['dev-tools.connection' => 'mysql', 'dev-tools.mysql_bin_path' => null]);
@@ -47,7 +48,7 @@ class AdminDevToolsTest extends TestCase
     {
         $this->get(route('admin.dev-tools.index'))->assertRedirect(route('admin.login'));
 
-        $this->actingAs($this->adminWithRole('admin'))
+        $this->actingAs($this->adminWithRole('editor'))
             ->get(route('admin.dev-tools.index'))
             ->assertForbidden();
 
@@ -56,24 +57,20 @@ class AdminDevToolsTest extends TestCase
         $this->actingAs($this->adminWithRole('super-admin'))
             ->get(route('admin.dev-tools.index'))
             ->assertOk()
-            ->assertSee('Your applicaton will be destroyed but chill it will restored properly')
             ->assertSee('Exclude runtime tables');
     }
 
-    public function test_super_admin_layout_renders_dev_tools_link_and_sidebar_menu_toggle(): void
+    public function test_super_admin_layout_renders_dev_tools_link(): void
     {
         $this->actingAs($this->adminWithRole('super-admin'))
             ->get(route('admin.dashboard'))
             ->assertOk()
-            ->assertSee(route('admin.dev-tools.index'))
-            ->assertSee('id="admin-sidebar"', false)
-            ->assertSee('aria-controls="admin-sidebar"', false)
-            ->assertSee('data-admin-menu-toggle', false);
+            ->assertSee(route('admin.dev-tools.index'));
     }
 
     public function test_dev_tools_link_is_hidden_from_other_admins(): void
     {
-        $this->actingAs($this->adminWithRole('admin'))
+        $this->actingAs($this->adminWithRole('editor'))
             ->get(route('admin.dashboard'))
             ->assertDontSee(route('admin.dev-tools.index'));
     }
@@ -81,11 +78,11 @@ class AdminDevToolsTest extends TestCase
     public function test_export_skips_runtime_tables_by_default(): void
     {
         $this->fakeMysql();
-        Storage::disk('public')->put('products/1/shirt.jpg', 'image');
+        $this->media()->put('products/1/shirt.jpg', 'image');
 
         $this->actingAs($this->adminWithRole('super-admin'))
             ->post(route('admin.dev-tools.export'), [
-                'include_media' => '0',
+                'contents' => 'database',
                 'exclude_runtime_tables' => '1',
             ])
             ->assertRedirect(route('admin.dev-tools.index'))
@@ -108,11 +105,11 @@ class AdminDevToolsTest extends TestCase
     public function test_export_can_include_media_and_runtime_tables(): void
     {
         $this->fakeMysql();
-        Storage::disk('public')->put('products/1/shirt.jpg', 'image');
+        $this->media()->put('products/1/shirt.jpg', 'image');
 
         $this->actingAs($this->adminWithRole('super-admin'))
             ->post(route('admin.dev-tools.export'), [
-                'include_media' => '1',
+                'contents' => 'database_media',
                 'exclude_runtime_tables' => '0',
             ])
             ->assertSessionHas('success');
@@ -146,13 +143,13 @@ class AdminDevToolsTest extends TestCase
             $this->markTestSkipped('Symlinks are not available on this system.');
         }
 
-        config(['filesystems.disks.public.root' => $root]);
-        Storage::forgetDisk('public');
+        config(['filesystems.disks.'.config('cms.media.disk').'.root' => $root]);
+        Storage::forgetDisk(config('cms.media.disk'));
 
         try {
             $this->actingAs($this->adminWithRole('super-admin'))
                 ->post(route('admin.dev-tools.export'), [
-                    'include_media' => '1',
+                    'contents' => 'database_media',
                     'exclude_runtime_tables' => '1',
                 ])
                 ->assertSessionHas('success');
@@ -180,6 +177,7 @@ class AdminDevToolsTest extends TestCase
         $this->actingAs($this->adminWithRole('super-admin'))
             ->post(route('admin.dev-tools.import'), [
                 'backup' => 'backup-2026-01-01_000000.zip',
+                'restore' => 'all',
                 'confirm' => 'confirm',
             ])
             ->assertSessionHasErrors('confirm');
@@ -190,20 +188,21 @@ class AdminDevToolsTest extends TestCase
     public function test_import_from_a_listed_backup_replaces_database_and_media(): void
     {
         $this->fakeMysql();
-        Storage::disk('public')->put('products/1/old.jpg', 'old');
+        $this->media()->put('products/1/old.jpg', 'old');
         $this->storeBackup('backup-2026-01-01_000000-media.zip', ['media/products/2/new.jpg' => 'new']);
 
         $this->actingAs($this->adminWithRole('super-admin'))
             ->post(route('admin.dev-tools.import'), [
                 'backup' => 'backup-2026-01-01_000000-media.zip',
+                'restore' => 'all',
                 'confirm' => 'CONFIRM',
             ])
             ->assertRedirect(route('admin.dev-tools.index'))
             ->assertSessionHas('success');
 
         Process::assertRan(fn (PendingProcess $process) => $this->isBinary($process, 'mysql'));
-        Storage::disk('public')->assertMissing('products/1/old.jpg');
-        $this->assertSame('new', Storage::disk('public')->get('products/2/new.jpg'));
+        $this->media()->assertMissing('products/1/old.jpg');
+        $this->assertSame('new', $this->media()->get('products/2/new.jpg'));
         $this->assertFalse(app()->isDownForMaintenance());
 
         $safetyBackups = collect(Storage::disk('local')->files('backups'))
@@ -220,17 +219,18 @@ class AdminDevToolsTest extends TestCase
     public function test_import_accepts_an_uploaded_sql_dump(): void
     {
         $this->fakeMysql();
-        Storage::disk('public')->put('products/1/keep.jpg', 'keep');
+        $this->media()->put('products/1/keep.jpg', 'keep');
 
         $this->actingAs($this->adminWithRole('super-admin'))
             ->post(route('admin.dev-tools.import'), [
                 'file' => UploadedFile::fake()->createWithContent('dump.sql', "-- dump\n"),
+                'restore' => 'all',
                 'confirm' => 'CONFIRM',
             ])
             ->assertSessionHas('success');
 
         Process::assertRan(fn (PendingProcess $process) => $this->isBinary($process, 'mysql'));
-        Storage::disk('public')->assertExists('products/1/keep.jpg');
+        $this->media()->assertExists('products/1/keep.jpg');
     }
 
     public function test_a_failed_restore_reports_the_error_and_lifts_maintenance_mode(): void
@@ -249,6 +249,7 @@ class AdminDevToolsTest extends TestCase
         $this->actingAs($this->adminWithRole('super-admin'))
             ->post(route('admin.dev-tools.import'), [
                 'backup' => 'backup-2026-01-01_000000.zip',
+                'restore' => 'all',
                 'confirm' => 'CONFIRM',
             ])
             ->assertRedirect(route('admin.dev-tools.index'))
@@ -275,6 +276,7 @@ class AdminDevToolsTest extends TestCase
         $this->actingAs($this->adminWithRole('super-admin'))
             ->post(route('admin.dev-tools.import'), [
                 'backup' => 'backup-2026-01-01_000000.zip',
+                'restore' => 'all',
                 'confirm' => 'CONFIRM',
             ])
             ->assertSessionHas('success');
@@ -295,13 +297,14 @@ class AdminDevToolsTest extends TestCase
         $this->actingAs($this->adminWithRole('super-admin'))
             ->post(route('admin.dev-tools.import'), [
                 'backup' => 'backup-2026-01-01_000000-media.zip',
+                'restore' => 'all',
                 'confirm' => 'CONFIRM',
             ])
             ->assertSessionHas('success');
 
-        Storage::disk('public')->assertExists('products/1/photo.jpg');
-        Storage::disk('public')->assertMissing('products/1/shell.php');
-        Storage::disk('public')->assertMissing('.htaccess');
+        $this->media()->assertExists('products/1/photo.jpg');
+        $this->media()->assertMissing('products/1/shell.php');
+        $this->media()->assertMissing('.htaccess');
     }
 
     public function test_a_second_restore_is_refused_while_one_is_running(): void
@@ -314,6 +317,7 @@ class AdminDevToolsTest extends TestCase
         $this->actingAs($this->adminWithRole('super-admin'))
             ->post(route('admin.dev-tools.import'), [
                 'backup' => 'backup-2026-01-01_000000.zip',
+                'restore' => 'all',
                 'confirm' => 'CONFIRM',
             ])
             ->assertSessionHas('error', fn (string $message) => str_contains($message, 'already running'));
@@ -332,7 +336,7 @@ class AdminDevToolsTest extends TestCase
         $this->actingAs($admin)->delete('/admin/dev-tools/backups/..%2F.env')->assertNotFound();
 
         $this->actingAs($admin)
-            ->post(route('admin.dev-tools.import'), ['backup' => '../.env', 'confirm' => 'CONFIRM'])
+            ->post(route('admin.dev-tools.import'), ['restore' => 'all', 'backup' => '../.env', 'confirm' => 'CONFIRM'])
             ->assertSessionHasErrors('backup');
 
         Process::assertNothingRan();
@@ -346,6 +350,7 @@ class AdminDevToolsTest extends TestCase
         $this->actingAs($this->adminWithRole('super-admin'))
             ->post(route('admin.dev-tools.import'), [
                 'backup' => 'backup-2026-01-01_000000.zip',
+                'restore' => 'all',
                 'confirm' => 'CONFIRM',
             ])
             ->assertSessionHas('error', fn (string $message) => str_contains($message, 'unsafe path'));
@@ -382,7 +387,7 @@ class AdminDevToolsTest extends TestCase
     public function test_backup_command_can_back_up_media_only(): void
     {
         $this->fakeMysql();
-        Storage::disk('public')->put('products/1/shirt.jpg', 'image');
+        $this->media()->put('products/1/shirt.jpg', 'image');
 
         $this->artisan('ecommerce:backup', ['--media-only' => true])->assertSuccessful();
 
@@ -407,7 +412,7 @@ class AdminDevToolsTest extends TestCase
     public function test_export_with_database_and_media_saves_one_file_with_both(): void
     {
         $this->fakeMysql();
-        Storage::disk('public')->put('products/1/shirt.jpg', 'image');
+        $this->media()->put('products/1/shirt.jpg', 'image');
 
         $this->actingAs($this->adminWithRole('super-admin'))
             ->post(route('admin.dev-tools.export'), [
@@ -429,7 +434,7 @@ class AdminDevToolsTest extends TestCase
     public function test_export_with_media_only_saves_a_media_backup(): void
     {
         $this->fakeMysql();
-        Storage::disk('public')->put('products/1/shirt.jpg', 'image');
+        $this->media()->put('products/1/shirt.jpg', 'image');
 
         $this->actingAs($this->adminWithRole('super-admin'))
             ->post(route('admin.dev-tools.export'), ['contents' => 'media'])
@@ -449,10 +454,10 @@ class AdminDevToolsTest extends TestCase
     public function test_media_backup_zips_only_the_media_library(): void
     {
         $this->fakeMysql();
-        Storage::disk('public')->put('products/1/shirt.jpg', 'image');
+        $this->media()->put('products/1/shirt.jpg', 'image');
 
         $this->actingAs($this->adminWithRole('super-admin'))
-            ->post(route('admin.dev-tools.media.export'))
+            ->post(route('admin.dev-tools.export'), ['contents' => 'media'])
             ->assertRedirect(route('admin.dev-tools.index'))
             ->assertSessionHas('success');
 
@@ -477,7 +482,7 @@ class AdminDevToolsTest extends TestCase
             ->get(route('admin.dev-tools.index'))
             ->assertOk()
             ->assertSee('Media only')
-            ->assertSee('data-restore="media-2026-01-01_000000.zip" data-mode="media"', false);
+            ->assertSee('data-restore="media-2026-01-01_000000.zip" data-type="media"', false);
     }
 
     public function test_import_form_restores_the_whole_store_by_default(): void
@@ -494,7 +499,7 @@ class AdminDevToolsTest extends TestCase
     public function test_import_with_media_only_merges_media_without_confirm(): void
     {
         $this->fakeMysql();
-        Storage::disk('public')->put('products/1/kept.jpg', 'uploaded after the backup');
+        $this->media()->put('products/1/kept.jpg', 'uploaded after the backup');
         $this->storeMediaBackup('media-2026-01-01_000000.zip', ['media/products/1/missing.jpg' => 'missing']);
 
         $this->actingAs($this->adminWithRole('super-admin'))
@@ -505,8 +510,8 @@ class AdminDevToolsTest extends TestCase
             ->assertRedirect(route('admin.dev-tools.index'))
             ->assertSessionHas('success', fn (string $message) => str_contains($message, '1 added, 0 updated'));
 
-        $this->assertSame('missing', Storage::disk('public')->get('products/1/missing.jpg'));
-        $this->assertSame('uploaded after the backup', Storage::disk('public')->get('products/1/kept.jpg'));
+        $this->assertSame('missing', $this->media()->get('products/1/missing.jpg'));
+        $this->assertSame('uploaded after the backup', $this->media()->get('products/1/kept.jpg'));
         $this->assertFalse(app()->isDownForMaintenance());
 
         Process::assertNothingRan();
@@ -524,15 +529,15 @@ class AdminDevToolsTest extends TestCase
             ])
             ->assertSessionHasErrors('confirm');
 
-        $this->assertFalse(Storage::disk('public')->exists('products/1/missing.jpg'));
+        $this->assertFalse($this->media()->exists('products/1/missing.jpg'));
     }
 
     public function test_media_restore_merges_into_the_current_media(): void
     {
         $this->fakeMysql();
-        Storage::disk('public')->put('products/1/kept.jpg', 'uploaded after the backup');
-        Storage::disk('public')->put('products/1/changed.jpg', 'new version');
-        Storage::disk('public')->put('products/1/same.jpg', 'same');
+        $this->media()->put('products/1/kept.jpg', 'uploaded after the backup');
+        $this->media()->put('products/1/changed.jpg', 'new version');
+        $this->media()->put('products/1/same.jpg', 'same');
         $this->storeMediaBackup('media-2026-01-01_000000.zip', [
             'media/products/1/missing.jpg' => 'missing',
             'media/products/1/changed.jpg' => 'old version',
@@ -540,12 +545,12 @@ class AdminDevToolsTest extends TestCase
         ]);
 
         $this->actingAs($this->adminWithRole('super-admin'))
-            ->post(route('admin.dev-tools.media.import'), ['media_backup' => 'media-2026-01-01_000000.zip'])
+            ->post(route('admin.dev-tools.import'), ['restore' => 'media', 'backup' => 'media-2026-01-01_000000.zip'])
             ->assertRedirect(route('admin.dev-tools.index'))
             ->assertSessionHas('success', fn (string $message) => str_contains($message, '1 added, 1 updated')
                 && str_contains($message, 'pre-media-import-'));
 
-        $public = Storage::disk('public');
+        $public = $this->media();
         $this->assertSame('missing', $public->get('products/1/missing.jpg'));
         $this->assertSame('old version', $public->get('products/1/changed.jpg'));
         $this->assertSame('uploaded after the backup', $public->get('products/1/kept.jpg'));
@@ -575,12 +580,13 @@ class AdminDevToolsTest extends TestCase
         Storage::disk('local')->delete('backups/backup-2026-01-01_000000-media.zip');
 
         $this->actingAs($this->adminWithRole('super-admin'))
-            ->post(route('admin.dev-tools.media.import'), [
-                'media_file' => UploadedFile::fake()->createWithContent('backup.zip', $contents),
+            ->post(route('admin.dev-tools.import'), [
+                'restore' => 'media',
+                'file' => UploadedFile::fake()->createWithContent('backup.zip', $contents),
             ])
             ->assertSessionHas('success', fn (string $message) => str_contains($message, '1 added, 0 updated'));
 
-        $this->assertSame('new', Storage::disk('public')->get('products/2/new.jpg'));
+        $this->assertSame('new', $this->media()->get('products/2/new.jpg'));
         $this->assertSame([], Storage::disk('local')->files('backups'));
         Process::assertNothingRan();
     }
@@ -602,15 +608,16 @@ class AdminDevToolsTest extends TestCase
         ]);
 
         $this->actingAs($this->adminWithRole('super-admin'))
-            ->post(route('admin.dev-tools.media.import'), ['media_backup' => 'media-2026-01-01_000000.zip'])
+            ->post(route('admin.dev-tools.import'), ['restore' => 'media', 'backup' => 'media-2026-01-01_000000.zip'])
             ->assertSessionHas('success');
 
-        $public = Storage::disk('public');
+        $public = $this->media();
         $public->assertExists('products/1/photo.jpg');
         $public->assertMissing('products/1/shell.php');
-        $public->assertMissing('products/1/logo.svg');
-        $public->assertMissing('products/1/page.html');
-        $public->assertMissing('products/1/app.js');
+        // The media library itself accepts svg, html and js, so a restore puts them back.
+        $public->assertExists('products/1/logo.svg');
+        $public->assertExists('products/1/page.html');
+        $public->assertExists('products/1/app.js');
         $public->assertMissing('web.config');
         $public->assertMissing('.htaccess');
         $public->assertMissing('products/1/a.jpg');
@@ -627,11 +634,12 @@ class AdminDevToolsTest extends TestCase
         $this->actingAs($this->adminWithRole('super-admin'))
             ->post(route('admin.dev-tools.import'), [
                 'backup' => 'backup-2026-01-01_000000-media.zip',
+                'restore' => 'all',
                 'confirm' => 'CONFIRM',
             ])
             ->assertSessionHas('success');
 
-        Storage::disk('public')->assertExists('products/1/photo.jpg');
+        $this->media()->assertExists('products/1/photo.jpg');
     }
 
     public function test_restoring_a_backup_of_an_empty_media_library_changes_nothing(): void
@@ -639,11 +647,11 @@ class AdminDevToolsTest extends TestCase
         $this->fakeMysql();
         $admin = $this->adminWithRole('super-admin');
 
-        $this->actingAs($admin)->post(route('admin.dev-tools.media.export'))->assertSessionHas('success');
+        $this->actingAs($admin)->post(route('admin.dev-tools.export'), ['contents' => 'media'])->assertSessionHas('success');
         $backup = basename(Storage::disk('local')->files('backups')[0]);
 
         $this->actingAs($admin)
-            ->post(route('admin.dev-tools.media.import'), ['media_backup' => $backup])
+            ->post(route('admin.dev-tools.import'), ['restore' => 'media', 'backup' => $backup])
             ->assertSessionHas('success', 'Media is already up to date. Nothing was changed.');
     }
 
@@ -658,18 +666,18 @@ class AdminDevToolsTest extends TestCase
         $admin = $this->adminWithRole('super-admin');
 
         $this->actingAs($admin)
-            ->post(route('admin.dev-tools.media.import'), ['media_backup' => 'backup-2026-01-01_000000.zip'])
+            ->post(route('admin.dev-tools.import'), ['restore' => 'media', 'backup' => 'backup-2026-01-01_000000.zip'])
             ->assertSessionHas('error', fn (string $message) => str_contains($message, 'no media'));
 
         $this->actingAs($admin)
-            ->post(route('admin.dev-tools.media.import'), ['media_backup' => 'media-2026-01-01_000000.zip'])
+            ->post(route('admin.dev-tools.import'), ['restore' => 'media', 'backup' => 'media-2026-01-01_000000.zip'])
             ->assertSessionHas('error', fn (string $message) => str_contains($message, 'unsafe path'));
 
-        $this->assertSame([], Storage::disk('public')->allFiles());
+        $this->assertSame([], $this->media()->allFiles());
 
         $this->actingAs($admin)
-            ->post(route('admin.dev-tools.media.import'), ['media_backup' => '../.env'])
-            ->assertSessionHasErrors('media_backup', errorBag: 'media');
+            ->post(route('admin.dev-tools.import'), ['restore' => 'media', 'backup' => '../.env'])
+            ->assertSessionHasErrors('backup');
     }
 
     public function test_full_import_refuses_a_media_only_backup(): void
@@ -680,6 +688,7 @@ class AdminDevToolsTest extends TestCase
         $this->actingAs($this->adminWithRole('super-admin'))
             ->post(route('admin.dev-tools.import'), [
                 'backup' => 'media-2026-01-01_000000.zip',
+                'restore' => 'all',
                 'confirm' => 'CONFIRM',
             ])
             ->assertSessionHas('error', fn (string $message) => str_contains($message, 'media-only backup'));
@@ -695,19 +704,24 @@ class AdminDevToolsTest extends TestCase
         $lock->get();
 
         $this->actingAs($this->adminWithRole('super-admin'))
-            ->post(route('admin.dev-tools.media.import'), ['media_backup' => 'media-2026-01-01_000000.zip'])
+            ->post(route('admin.dev-tools.import'), ['restore' => 'media', 'backup' => 'media-2026-01-01_000000.zip'])
             ->assertSessionHas('error', fn (string $message) => str_contains($message, 'already running'));
 
         $lock->release();
-        Storage::disk('public')->assertMissing('products/1/a.jpg');
+        $this->media()->assertMissing('products/1/a.jpg');
     }
 
     public function test_only_super_admins_can_back_up_or_restore_media(): void
     {
-        $admin = $this->adminWithRole('admin');
+        $admin = $this->adminWithRole('editor');
 
-        $this->actingAs($admin)->post(route('admin.dev-tools.media.export'))->assertForbidden();
-        $this->actingAs($admin)->post(route('admin.dev-tools.media.import'), [])->assertForbidden();
+        $this->actingAs($admin)->post(route('admin.dev-tools.export'), ['contents' => 'media'])->assertForbidden();
+        $this->actingAs($admin)->post(route('admin.dev-tools.import'), ['restore' => 'media'])->assertForbidden();
+    }
+
+    private function media(): FilesystemAdapter
+    {
+        return Storage::disk(config('cms.media.disk'));
     }
 
     private function adminWithRole(string $role): User

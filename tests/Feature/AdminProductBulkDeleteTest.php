@@ -3,15 +3,16 @@
 namespace Tests\Feature;
 
 use App\Models\User;
-use Carepeerinfotech\Ecommerce\Database\Seeders\EcommerceSeeder;
-use Carepeerinfotech\Ecommerce\Models\Product;
-use Carepeerinfotech\Ecommerce\Models\Role;
-use Database\Seeders\StorefrontCatalogSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Peer\Ecommerce\Database\Seeders\EcommerceSeeder;
+use Peer\Ecommerce\Models\Product;
+use Peer\Ecommerce\Models\Role;
+use Tests\Concerns\BuildsStorefrontCatalog;
 use Tests\TestCase;
 
 class AdminProductBulkDeleteTest extends TestCase
 {
+    use BuildsStorefrontCatalog;
     use RefreshDatabase;
 
     private User $admin;
@@ -21,7 +22,11 @@ class AdminProductBulkDeleteTest extends TestCase
         parent::setUp();
 
         $this->seed(EcommerceSeeder::class);
-        $this->seed(StorefrontCatalogSeeder::class);
+        $this->seedCategoryTree();
+
+        foreach (['One', 'Two', 'Three', 'Four'] as $index => $name) {
+            $this->makeProduct("Kurta {$name}", $this->subcategory('Men', 'Kurta Pajamas'), 'RE-03'.$index, 1999);
+        }
 
         $this->admin = User::factory()->create()->fresh();
         $this->admin->roles()->attach(Role::firstWhere('slug', 'super-admin'));
@@ -34,21 +39,28 @@ class AdminProductBulkDeleteTest extends TestCase
             ->assertSee('id="bulk-delete" disabled data-url="'.route('admin.products.bulk-destroy').'"', false);
     }
 
-    public function test_the_selected_products_and_their_variants_are_deleted(): void
+    public function test_the_trash_tab_has_no_delete_selected_button(): void
     {
-        $deleted = Product::query()->orderBy('id')->take(3)->get();
+        $this->actingAs($this->admin)->get(route('admin.products.index', ['tab' => 'trash']))
+            ->assertOk()
+            ->assertDontSee('id="bulk-delete"', false);
+    }
+
+    public function test_the_selected_products_go_to_the_trash_and_can_come_back_with_their_variants(): void
+    {
+        $trashed = Product::query()->orderBy('id')->take(3)->get();
         $kept = Product::query()->orderBy('id')->skip(3)->first();
 
         $this->actingAs($this->admin)
-            ->postJson(route('admin.products.bulk-destroy'), ['ids' => $deleted->modelKeys()])
+            ->postJson(route('admin.products.bulk-destroy'), ['ids' => $trashed->modelKeys()])
             ->assertOk()
-            ->assertJson(['success' => true, 'message' => '3 products deleted.']);
+            ->assertJson(['success' => true, 'message' => '3 products moved to trash.']);
 
-        foreach ($deleted as $product) {
-            $this->assertModelMissing($product);
-            $this->assertDatabaseMissing('product_variants', ['product_id' => $product->id]);
+        foreach ($trashed as $product) {
+            $this->assertSoftDeleted($product);
+            $this->assertDatabaseHas('product_variants', ['product_id' => $product->id]);
         }
-        $this->assertModelExists($kept);
+        $this->assertNotSoftDeleted($kept);
     }
 
     public function test_nothing_is_deleted_without_a_selection(): void
@@ -71,6 +83,6 @@ class AdminProductBulkDeleteTest extends TestCase
             ->postJson(route('admin.products.bulk-destroy'), ['ids' => [$product->id]])
             ->assertForbidden();
 
-        $this->assertModelExists($product);
+        $this->assertNotSoftDeleted($product);
     }
 }

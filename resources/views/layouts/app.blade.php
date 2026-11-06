@@ -22,7 +22,7 @@
   <link rel="stylesheet" href="{{ asset('assets/css/style.css') }}?v={{ filemtime(public_path('assets/css/style.css')) }}">
 </head>
 
-<body data-page="@yield('page')" data-whatsapp="{{ $storeWhatsApp['digits'] }}"@hasSection('category') data-cat="@yield('category')" data-cat-name="@yield('category_name')"@endif>
+<body data-page="@yield('page')" data-whatsapp="{{ $storeWhatsApp->digits }}"@hasSection('category') data-cat="@yield('category')" data-cat-name="@yield('category_name')"@endif>
   @include('partials.header')
 
   <!-- mobile menu -->

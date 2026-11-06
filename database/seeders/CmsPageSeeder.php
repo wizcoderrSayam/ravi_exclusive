@@ -2,37 +2,35 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-use Carepeerinfotech\Ecommerce\Models\CmsPage;
-use Carepeerinfotech\Ecommerce\Services\Settings\SettingsService;
 use Illuminate\Database\Seeder;
+use Peer\CMS\Models\Layout;
+use Peer\CMS\Models\Page;
+use Peer\Ecommerce\Support\StoreSettings;
 
 /**
  * Store information pages. About and Contact only restate what the demo site
  * already says, so they are published. The policy pages commit the business to
  * timelines and terms, so they are seeded as drafts for the owner to review and
- * publish from the admin. Safe to re-run: an existing page is never overwritten,
- * so edits made in the admin survive.
+ * publish from the CMS. The storefront doesn't link to them yet: the CMS's public
+ * site is off, so they are only seen in the panel. Safe to re-run: an existing page
+ * is never overwritten, so edits made in the CMS survive.
  */
 class CmsPageSeeder extends Seeder
 {
     private const ADDRESS = 'M/s Ravi Exclusif,  22, Katra Jaimal Singh, Amritsar, Amritsar, Punjab, India – 143001';
 
-    private const PHONE = '+91-814-814-62-62';
-
-    private const WHATSAPP_URL = 'https://wa.me/918148146262';
-
-    public function __construct(private SettingsService $settings) {}
-
     public function run(): void
     {
-        $authorId = User::query()->whereHas('roles', fn ($roles) => $roles->where('slug', 'super-admin'))->value('id');
+        $layoutId = Layout::firstOrCreateStarter()->id;
 
         foreach ($this->pages() as $slug => $page) {
-            CmsPage::firstOrCreate(['slug' => $slug], [
-                ...$page,
-                'created_by' => $authorId,
-                'published_at' => $page['status'] === 'published' ? now() : null,
+            Page::query()->firstOrCreate(['slug' => $slug], [
+                'name' => $page['title'],
+                'title' => $page['meta_title'],
+                'html' => $page['content'],
+                'status' => $page['status'],
+                'layout_id' => $layoutId,
+                'seo_head' => '<meta name="description" content="'.e($page['meta_description']).'">',
             ]);
         }
     }
@@ -43,10 +41,12 @@ class CmsPageSeeder extends Seeder
     private function pages(): array
     {
         $address = self::ADDRESS;
-        $phone = self::PHONE;
-        $whatsapp = self::WHATSAPP_URL;
-        $flatRate = number_format($this->settings->float('shipping', 'flat_rate', 49));
-        $freeAbove = number_format($this->settings->float('shipping', 'free_above', 999));
+        $storeWhatsApp = app('storefront.whatsapp');
+        $phone = $storeWhatsApp->display;
+        $tel = 'tel:+'.$storeWhatsApp->digits;
+        $whatsapp = 'https://wa.me/'.$storeWhatsApp->digits;
+        $flatRate = number_format((float) StoreSettings::get('shipping.flat_rate', 49));
+        $freeAbove = number_format((float) StoreSettings::get('shipping.free_above', 999));
 
         return [
             'about-us' => [
@@ -63,7 +63,7 @@ class CmsPageSeeder extends Seeder
                     <p>From the mehndi night to the doli, we dress the bride, the groom and the whole baraat: party lehengas and anarkalis for mehndi and sangeet, Punjabi suits for shagan and chunni, bridal lehengas for the bride, and sherwanis, safas and juttis for the groom.</p>
                     <h2>Aao ji, visit us</h2>
                     <p>Come to our store for personal styling, trials and fittings for the whole family.</p>
-                    <p>{$address}<br>Phone / WhatsApp: <a href="tel:+918148146262">{$phone}</a></p>
+                    <p>{$address}<br>Phone / WhatsApp: <a href="{$tel}">{$phone}</a></p>
                     HTML,
             ],
             'contact-us' => [
@@ -76,7 +76,7 @@ class CmsPageSeeder extends Seeder
                     <p>{$address}</p>
                     <p><a href="https://www.google.com/maps/search/?api=1&amp;query=22+Katra+Jaimal+Singh+Amritsar+143001" target="_blank" rel="noopener">Get directions on Google Maps</a></p>
                     <h2>Call or WhatsApp</h2>
-                    <p>Phone: <a href="tel:+918148146262">{$phone}</a></p>
+                    <p>Phone: <a href="{$tel}">{$phone}</a></p>
                     <p><a href="{$whatsapp}" target="_blank" rel="noopener">Chat with us on WhatsApp</a> for orders, sizing and alteration questions.</p>
                     <h2>Instagram</h2>
                     <p>See the newest arrivals first: <a href="https://www.instagram.com/ravi.exclusif/" target="_blank" rel="noopener">@ravi.exclusif</a></p>
@@ -97,7 +97,7 @@ class CmsPageSeeder extends Seeder
                     <h2>Cash on delivery</h2>
                     <p>Cash on delivery is available on eligible orders and pin codes.</p>
                     <h2>Questions</h2>
-                    <p>Call or WhatsApp us on <a href="tel:+918148146262">{$phone}</a>.</p>
+                    <p>Call or WhatsApp us on <a href="{$tel}">{$phone}</a>.</p>
                     HTML,
             ],
             'returns-and-exchanges' => [
@@ -141,7 +141,7 @@ class CmsPageSeeder extends Seeder
                     <h2>Who we share it with</h2>
                     <p>We share only what is needed with our payment gateway and courier partners to complete your order. We do not sell your personal information.</p>
                     <h2>Your choices</h2>
-                    <p>You can ask us to update or delete your personal information by contacting us on <a href="tel:+918148146262">{$phone}</a>.</p>
+                    <p>You can ask us to update or delete your personal information by contacting us on <a href="{$tel}">{$phone}</a>.</p>
                     <h2>Contact</h2>
                     <p>{$address}</p>
                     HTML,

@@ -2,14 +2,17 @@
 
 namespace Tests\Feature;
 
-use Carepeerinfotech\Ecommerce\Models\Category;
-use Carepeerinfotech\Ecommerce\Models\Product;
-use Database\Seeders\StorefrontCatalogSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Peer\CMS\Facades\CMS;
+use Peer\Ecommerce\Models\Product;
+use Tests\Concerns\BuildsStorefrontCatalog;
 use Tests\TestCase;
 
 class StorefrontProductPageTest extends TestCase
 {
+    use BuildsStorefrontCatalog;
     use RefreshDatabase;
 
     /** The Size block on the product page, shown or hidden; the Quantity block is hidden on its own. */
@@ -21,7 +24,20 @@ class StorefrontProductPageTest extends TestCase
     {
         parent::setUp();
 
-        $this->seed(StorefrontCatalogSeeder::class);
+        $this->seedCategoryTree();
+
+        $coOrds = $this->subcategory('Women', 'Co-ord Sets');
+        $this->makeProduct('Festive Co-ord Set', $coOrds, 'RE-0031', 19999, ['XS', 'S', 'M', 'L', 'XL', 'XXL'], [
+            'meta_title' => 'Festive Co-ord Set | Ravi Exclusive',
+            'description' => 'Matching ethnic co-ord sets for an easy, put-together festive look.',
+        ]);
+        $this->makeProduct('Chikankari Co-ord Set', $coOrds, 'RE-0032', 8999);
+        $this->makeProduct('Royal Co-ord Set', $coOrds, 'RE-0033', 8999);
+
+        $kurtas = $this->subcategory('Men', 'Kurta Pajamas');
+        foreach (['Classic Kurta Pyjama', 'Ivory Kurta', 'Navy Kurta', 'Rust Kurta', 'Olive Kurta', 'Teal Kurta'] as $index => $name) {
+            $this->makeProduct($name, $kurtas, 'RE-02'.$index, 1999);
+        }
     }
 
     public function test_it_shows_the_product_with_its_order_controls(): void
@@ -60,13 +76,23 @@ class StorefrontProductPageTest extends TestCase
     {
         $product = $this->product('Festive Co-ord Set');
 
-        $response = $this->get(route('shop.product.preview', $product->slug));
+        // A real file in the real media folder: the preview reads the photo the page's URL points at.
+        Storage::forgetDisk(config('cms.media.disk'));
+        $path = 'Products/link-preview-test.png';
+        CMS::mediaDisk()->put($path, UploadedFile::fake()->image('photo.png', 1600, 900)->getContent());
+        $product->update(['images' => [$path]]);
 
-        $response->assertOk();
-        $response->assertHeader('Content-Type', 'image/jpeg');
-        $size = getimagesizefromstring($response->getContent());
-        $this->assertSame(IMAGETYPE_JPEG, $size[2]);
-        $this->assertLessThanOrEqual(1200, $size[0]);
+        try {
+            $response = $this->get(route('shop.product.preview', $product->slug));
+
+            $response->assertOk();
+            $response->assertHeader('Content-Type', 'image/jpeg');
+            $size = getimagesizefromstring($response->getContent());
+            $this->assertSame(IMAGETYPE_JPEG, $size[2]);
+            $this->assertLessThanOrEqual(1200, $size[0]);
+        } finally {
+            CMS::mediaDisk()->delete($path);
+        }
     }
 
     public function test_an_inactive_products_preview_image_is_not_found(): void
@@ -106,10 +132,10 @@ class StorefrontProductPageTest extends TestCase
         $this->get(route('shop.product', $product->slug))->assertNotFound();
     }
 
-    public function test_a_product_in_an_inactive_category_is_not_found(): void
+    public function test_a_product_without_a_category_is_not_found(): void
     {
         $product = $this->product('Festive Co-ord Set');
-        Category::firstWhere('slug', 'women-co-ord-sets')->update(['is_active' => false]);
+        $product->categories()->detach();
 
         $this->get(route('shop.product', $product->slug))->assertNotFound();
     }

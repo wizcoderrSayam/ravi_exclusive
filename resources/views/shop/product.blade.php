@@ -2,7 +2,7 @@
 
 @php
   $sizes = explode('|', $card->sizes);
-  $summary = $product->meta_description ?: ($product->short_description ?: \Illuminate\Support\Str::limit((string) $product->description, 160));
+  $summary = $product->meta_description ?: ($product->short_description ?: \Illuminate\Support\Str::limit($card->description, 160));
   $photo = $gallery['images'][$gallery['active']] ?? null;
 @endphp
 
@@ -100,13 +100,13 @@
         <div class="mdetails">
           <div><b>Colour:</b> As shown (more shades in store)</div>
           <div><b>Product code:</b> {{ $card->code }}</div>
-          <div>Need help with size or customisation? Call <a href="tel:+{{ $storeWhatsApp['digits'] }}" class="text-red">{{ $storeWhatsApp['display'] }}</a></div>
+          <div>Need help with size or customisation? Call <a href="tel:+{{ $storeWhatsApp->digits }}" class="text-red">{{ $storeWhatsApp->display }}</a></div>
         </div>
 
-        @if (filled($product->description))
+        @if (filled($card->description))
           <div class="pd-desc">
             <h2>Product details</h2>
-            @foreach (preg_split('/\R{2,}/', trim($product->description)) as $paragraph)
+            @foreach (preg_split('/\R{2,}/', $card->description) as $paragraph)
               <p>{!! nl2br(e($paragraph)) !!}</p>
             @endforeach
           </div>

@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
-@section('title', $category->meta_title ?: "{$category->name} — Ravi Exclusive | Amritsar")
-@section('description', $category->meta_description ?: $category->description)
+@section('title', "{$category->name} Ethnic & Designer Wear | Ravi Exclusive Amritsar")
+@section('description', $categoryDescription)
 @section('page', 'category')
 @section('category', $category->slug)
 @section('category_name', $category->name)
@@ -13,7 +13,7 @@
     <nav class="chips" aria-label="Subcategories">
       <a class="chip on" href="#all" data-sub-link="">All <span class="chip-count" data-chip-count></span></a>
       @foreach ($category->children as $subcategory)
-        @php($subcategorySlug = \Illuminate\Support\Str::after($subcategory->slug, $category->slug.'-'))
+        @php($subcategorySlug = \App\View\Components\ProductCard::subcategoryFilter($subcategory->name))
         <a class="chip" href="#{{ $subcategorySlug }}" data-sub-link="{{ $subcategorySlug }}" data-sub-name="{{ $subcategory->name }}">{{ $subcategory->name }} <span class="chip-count" data-chip-count></span></a>
       @endforeach
     </nav>

@@ -2,20 +2,23 @@
 
 namespace Tests\Feature;
 
-use Carepeerinfotech\Ecommerce\Models\Category;
-use Database\Seeders\StorefrontCatalogSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\BuildsStorefrontCatalog;
 use Tests\TestCase;
 
 class StorefrontHomeTest extends TestCase
 {
+    use BuildsStorefrontCatalog;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->seed(StorefrontCatalogSeeder::class);
+        $this->seedCategoryTree();
+
+        // A bestseller, so the home page's product rows have something to show.
+        $this->makeProduct('Festive Sherwani', $this->subcategory('Men', 'Indo-Westerns'), 'RE-0035', 5399, attributes: ['is_featured' => true]);
     }
 
     public function test_shop_sections_come_before_new_arrivals_and_bestsellers(): void
@@ -42,15 +45,15 @@ class StorefrontHomeTest extends TestCase
         $this->assertSame('Coat Suits / Tuxedos', $tiles[route('shop.boys').'#coat-suits-tuxedos']['name']);
         $this->assertSame('Waistcoat Sets', $tiles[route('shop.men').'#waistcoat-sets']['name']);
         $this->assertSame('Co-ord Sets', $tiles[route('shop.women').'#co-ord-sets']['name']);
-        $this->assertSame('/assets/images/categories/men-indo-westerns.webp', $tiles[route('shop.men').'#indo-westerns']['image']);
-        $this->assertSame('/assets/images/categories/boys-jodhpuri.webp', $tiles[route('shop.boys').'#jodhpuri']['image']);
-        $this->assertSame('/assets/images/categories/men-kurta-pajamas.webp', $tiles[route('shop.men').'#kurta-pajamas']['image']);
-        $this->assertSame('/assets/images/categories/men-waistcoat-sets.webp', $tiles[route('shop.men').'#waistcoat-sets']['image']);
+        $this->assertStringEndsWith('Categories/men-indo-westerns.webp', $tiles[route('shop.men').'#indo-westerns']['image']);
+        $this->assertStringEndsWith('Categories/boys-jodhpuri.webp', $tiles[route('shop.boys').'#jodhpuri']['image']);
+        $this->assertStringEndsWith('Categories/men-kurta-pajamas.webp', $tiles[route('shop.men').'#kurta-pajamas']['image']);
+        $this->assertStringEndsWith('Categories/men-waistcoat-sets.webp', $tiles[route('shop.men').'#waistcoat-sets']['image']);
     }
 
-    public function test_inactive_subcategories_are_left_off_the_home_page(): void
+    public function test_subcategories_removed_in_the_cms_are_left_off_the_home_page(): void
     {
-        Category::firstWhere('slug', 'boys-jodhpuri')->update(['is_active' => false]);
+        $this->subcategory('Boys', 'Jodhpuri')->delete();
 
         $tiles = $this->homeTiles();
 

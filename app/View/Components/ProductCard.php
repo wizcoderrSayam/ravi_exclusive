@@ -3,18 +3,18 @@
 namespace App\View\Components;
 
 use App\Http\Controllers\StorefrontController;
-use Carepeerinfotech\Ecommerce\Models\Product;
-use Carepeerinfotech\Ecommerce\Models\ProductVariant;
-use Carepeerinfotech\Ecommerce\Support\Money;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Str;
 use Illuminate\View\Component;
+use Peer\Ecommerce\Models\Product;
+use Peer\Ecommerce\Models\ProductVariant;
+use Peer\Ecommerce\Support\Money;
 
 /**
  * A storefront product card. The data-* attributes it renders are what
  * public/assets/js/main.js reads for filtering, cart and wishlist.
  *
- * Expects the product's category.parent, images and variants to be eager loaded.
+ * Expects the product's categories.parent and variants to be eager loaded.
  */
 class ProductCard extends Component
 {
@@ -61,14 +61,14 @@ class ProductCard extends Component
 
     public function __construct(public Product $product)
     {
-        $category = $product->category;
+        $category = $product->categories->first(fn ($candidate): bool => $candidate->parent_id !== null) ?? $product->categories->first();
         $parent = $category?->parent;
 
         // Products normally sit in a subcategory; one filed directly under a top-level category has no subcategory.
         $top = $parent ?? $category;
         $this->categorySlug = $top?->slug ?? '';
         $this->categoryName = $top?->name ?? '';
-        $this->subcategorySlug = $parent ? Str::after($category->slug, $parent->slug.'-') : '';
+        $this->subcategorySlug = $parent ? self::subcategoryFilter($category->name) : '';
         $this->subcategoryName = $parent ? $category->name : '';
 
         // The product SKU is its default variant's, e.g. "RE-0035-S"; the product code drops the size.
@@ -83,7 +83,7 @@ class ProductCard extends Component
 
         // The short description reads "Fabric: Silk".
         $this->fabric = Str::contains((string) $product->short_description, ': ') ? Str::after($product->short_description, ': ') : '';
-        $this->description = trim((string) $product->description);
+        $this->description = app('storefront.whatsapp')->inText(trim((string) $product->description));
 
         // Without an active variant there is nothing to pick, so the product is sold as one size.
         $activeVariants = $product->variants->where('is_active', true);
@@ -96,6 +96,17 @@ class ProductCard extends Component
         $this->tint = self::TINTS[$product->id % count(self::TINTS)];
         $this->imageUrl = $product->primaryImageUrl();
         $this->url = route('shop.product', $product->slug);
+    }
+
+    /**
+     * A subcategory's value in listing filters and #links. Made from its name because
+     * the CMS's slugs are unique across the whole tree: Men's and Boys' "Waistcoat Sets"
+     * get different slugs but share a filter value within their own listing pages. A name
+     * with no Latin letters has no slug, and an empty value would mean the "All" chip.
+     */
+    public static function subcategoryFilter(string $name): string
+    {
+        return Str::slug($name) ?: 'c-'.substr(md5($name), 0, 8);
     }
 
     public function money(float $amount): string

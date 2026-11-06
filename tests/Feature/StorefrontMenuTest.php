@@ -2,21 +2,23 @@
 
 namespace Tests\Feature;
 
-use Carepeerinfotech\Ecommerce\Models\Category;
-use Database\Seeders\StorefrontCategorySeeder;
+use App\View\Components\ProductCard;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Peer\CMS\Models\Category;
+use Tests\Concerns\BuildsStorefrontCatalog;
 use Tests\TestCase;
 
 class StorefrontMenuTest extends TestCase
 {
+    use BuildsStorefrontCatalog;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->seed(StorefrontCategorySeeder::class);
+        $this->seedCategoryTree();
     }
 
     public function test_header_menu_lists_top_level_categories_with_their_subcategories(): void
@@ -45,20 +47,20 @@ class StorefrontMenuTest extends TestCase
 
     public function test_menu_reflects_category_changes(): void
     {
-        Category::firstWhere('slug', 'boys-jodhpuri')->update(['is_active' => false]);
-        Category::firstWhere('slug', 'men')->update(['is_active' => false]);
-        Category::firstWhere('slug', 'girls-lehenga')->update(['name' => 'Lehenga Choli']);
+        $this->subcategory('Boys', 'Jodhpuri')->delete();
+        Category::firstWhere('slug', 'men')->update(['name' => 'Gents']);
+        $this->subcategory('Girls', 'Lehenga')->update(['name' => 'Lehenga Choli']);
 
         $menu = $this->headerMenu(route('shop.search'));
 
         $this->assertSame(['Girls', 'Boys', 'Women'], $this->headings($menu));
         $this->assertStringNotContainsString('#jodhpuri', $menu);
-        $this->assertStringContainsString('<a href="'.route('shop.girls').'#lehenga">Lehenga Choli</a>', $menu);
+        $this->assertStringContainsString('<a href="'.route('shop.girls').'#lehenga-choli">Lehenga Choli</a>', $menu);
     }
 
     public function test_top_level_category_without_its_own_page_is_left_off_the_menu(): void
     {
-        Category::create(['name' => 'Accessories', 'slug' => 'accessories', 'is_active' => true, 'sort_order' => 0]);
+        Category::create(['name' => 'Accessories']);
 
         $this->assertSame(['Girls', 'Boys', 'Men', 'Women'], $this->headings($this->headerMenu(route('shop.search'))));
     }
@@ -69,6 +71,13 @@ class StorefrontMenuTest extends TestCase
 
         $this->assertStringContainsString('<a href="'.route('shop.boys').'" class="active">Boys</a>', $menu);
         $this->assertStringNotContainsString('<a href="'.route('shop.girls').'" class="active">', $menu);
+    }
+
+    public function test_a_subcategory_named_in_punjabi_still_gets_its_own_filter(): void
+    {
+        $this->assertNotSame('', ProductCard::subcategoryFilter('ਲਹਿੰਗਾ'));
+        $this->assertSame(ProductCard::subcategoryFilter('ਲਹਿੰਗਾ'), ProductCard::subcategoryFilter('ਲਹਿੰਗਾ'));
+        $this->assertNotSame(ProductCard::subcategoryFilter('ਲਹਿੰਗਾ'), ProductCard::subcategoryFilter('ਸ਼ਰਾਰਾ'));
     }
 
     /** The desktop mega menu's markup on the given page. */

@@ -3,19 +3,20 @@
 namespace Tests\Feature;
 
 use App\Models\User;
-use Carepeerinfotech\Ecommerce\Database\Seeders\EcommerceSeeder;
-use Carepeerinfotech\Ecommerce\Models\Product;
-use Carepeerinfotech\Ecommerce\Models\ProductVariant;
-use Carepeerinfotech\Ecommerce\Models\Role;
-use Database\Seeders\StorefrontCatalogSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
+use Peer\Ecommerce\Database\Seeders\EcommerceSeeder;
+use Peer\Ecommerce\Models\Product;
+use Peer\Ecommerce\Models\ProductVariant;
+use Peer\Ecommerce\Models\Role;
+use Tests\Concerns\BuildsStorefrontCatalog;
 use Tests\TestCase;
 
 class AdminProductVariantRemovalTest extends TestCase
 {
+    use BuildsStorefrontCatalog;
     use RefreshDatabase;
 
     private User $admin;
@@ -27,12 +28,12 @@ class AdminProductVariantRemovalTest extends TestCase
         parent::setUp();
 
         $this->seed(EcommerceSeeder::class);
-        $this->seed(StorefrontCatalogSeeder::class);
+        $this->seedCategoryTree();
 
         $this->admin = User::factory()->create()->fresh();
         $this->admin->roles()->attach(Role::firstWhere('slug', 'super-admin'));
 
-        $this->product = Product::query()->where('name', 'Festive Co-ord Set')->firstOrFail();
+        $this->product = $this->makeProduct('Festive Co-ord Set', $this->subcategory('Women', 'Co-ord Sets'), 'RE-0031', 19999, ['XS', 'S', 'M', 'L', 'XL', 'XXL']);
     }
 
     public function test_a_variant_left_out_of_the_saved_form_is_deleted(): void
@@ -119,24 +120,19 @@ class AdminProductVariantRemovalTest extends TestCase
         $this->assertSame($variants->count() - 1, $this->product->variants()->where('is_active', true)->count());
     }
 
-    public function test_removing_a_variant_deletes_its_images_and_their_files(): void
+    public function test_removing_a_variant_leaves_its_photo_in_the_media_library(): void
     {
-        Storage::fake('public');
+        $disk = Storage::disk(config('cms.media.disk'));
+        $disk->put('Products/m.jpg', 'm');
         $variants = $this->product->variants()->orderBy('id')->get();
         $removed = $variants->firstWhere('option_label', 'M');
-        $kept = $variants->firstWhere('option_label', 'L');
-        Storage::disk('public')->put('variants/m.jpg', 'm');
-        Storage::disk('public')->put('variants/l.jpg', 'l');
-        $removedImage = $removed->images()->create(['collection' => 'image', 'disk' => 'public', 'path' => 'variants/m.jpg']);
-        $keptImage = $kept->images()->create(['collection' => 'image', 'disk' => 'public', 'path' => 'variants/l.jpg']);
+        $removed->update(['images' => ['Products/m.jpg']]);
 
         $this->updateWith($variants->reject(fn (ProductVariant $variant): bool => $variant->is($removed)))
             ->assertOk();
 
-        $this->assertModelMissing($removedImage);
-        Storage::disk('public')->assertMissing('variants/m.jpg');
-        $this->assertModelExists($keptImage);
-        Storage::disk('public')->assertExists('variants/l.jpg');
+        $this->assertModelMissing($removed);
+        $disk->assertExists('Products/m.jpg');
     }
 
     public function test_a_saved_product_cannot_lose_its_last_variant(): void
@@ -169,7 +165,7 @@ class AdminProductVariantRemovalTest extends TestCase
         return [
             'name' => $this->product->name,
             'sku' => $this->product->sku,
-            'category_id' => $this->product->category_id,
+            'category_ids' => $this->product->categories->modelKeys(),
             'is_active' => 1,
             'variants' => $variants->values()->map(fn (ProductVariant $variant): array => [
                 'id' => $variant->id,

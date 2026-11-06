@@ -2,13 +2,12 @@
 
 namespace Database\Seeders;
 
-use Carepeerinfotech\Ecommerce\Models\Category;
-use Carepeerinfotech\Ecommerce\Models\Product;
-use Carepeerinfotech\Ecommerce\Services\Catalog\ProductCatalogService;
-use Carepeerinfotech\Ecommerce\Services\Media\ImageService;
+use Database\Seeders\Concerns\StoresMediaLibraryFiles;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
+use Peer\CMS\Models\Category;
+use Peer\Ecommerce\Models\Product;
+use Peer\Ecommerce\Services\Catalog\ProductCatalogService;
 
 /**
  * Seeds the shop's own products, taken from the admin's product export of
@@ -19,19 +18,15 @@ use Illuminate\Support\Str;
  *
  * Safe to re-run: rows are matched by slug and updated. Each product is sold
  * as one size range (e.g. "24 to 38"). A photo is only added to a product
- * without one, so photos uploaded in the admin are kept.
+ * without one, so photos chosen in the admin are kept.
  */
 class RaviProductListSeeder extends Seeder
 {
+    use StoresMediaLibraryFiles;
+
     private const STOCK = 100;
 
-    /** Where this seeder's photos live, relative to the public folder. */
-    private const PHOTO_PATH = '/assets/images/';
-
-    public function __construct(
-        private ProductCatalogService $catalog,
-        private ImageService $images,
-    ) {}
+    public function __construct(private ProductCatalogService $catalog) {}
 
     public function run(): void
     {
@@ -51,34 +46,18 @@ class RaviProductListSeeder extends Seeder
     {
         $parents = [];
 
-        foreach ([
-            'girls' => ['name' => 'Girls', 'sort_order' => 0],
-            'women' => ['name' => 'Women', 'sort_order' => 3],
-        ] as $slug => $attributes) {
-            $parent = Category::firstOrNew(['slug' => $slug]);
-            $parent->fill([
-                ...$attributes,
-                'parent_id' => null,
-                'is_active' => true,
-            ])->save();
-            $parents[$slug] = $parent;
+        foreach (['Girls', 'Women'] as $name) {
+            $parents[$name] = Category::query()->firstOrCreate(['name' => $name, 'parent_id' => null]);
         }
 
         $categories = [];
 
         foreach ([
-            'girls-lehenga' => ['name' => 'Lehenga', 'parent' => 'girls', 'sort_order' => 0],
-            'girls-sharara-palazzo' => ['name' => 'Sharara / Palazzo', 'parent' => 'girls', 'sort_order' => 1],
-            'women-co-ord-sets' => ['name' => 'Co-ord Sets', 'parent' => 'women', 'sort_order' => 0],
-        ] as $slug => $attributes) {
-            $category = Category::firstOrNew(['slug' => $slug]);
-            $category->fill([
-                'name' => $attributes['name'],
-                'parent_id' => $parents[$attributes['parent']]->id,
-                'sort_order' => $attributes['sort_order'],
-                'is_active' => true,
-            ])->save();
-            $categories[$slug] = $category;
+            'girls-lehenga' => ['name' => 'Lehenga', 'parent' => 'Girls'],
+            'girls-sharara-palazzo' => ['name' => 'Sharara / Palazzo', 'parent' => 'Girls'],
+            'women-co-ord-sets' => ['name' => 'Co-ord Sets', 'parent' => 'Women'],
+        ] as $key => $attributes) {
+            $categories[$key] = Category::query()->firstOrCreate(['name' => $attributes['name'], 'parent_id' => $parents[$attributes['parent']]->id]);
         }
 
         return $categories;
@@ -92,7 +71,7 @@ class RaviProductListSeeder extends Seeder
         $product = $this->catalog->save(
             Product::firstWhere('slug', $row['slug']) ?? new Product,
             [
-                'category_id' => $category->id,
+                'category_ids' => [$category->id],
                 'name' => $row['name'],
                 'slug' => $row['slug'],
                 'brand' => 'Ravi Exclusive',
@@ -119,24 +98,9 @@ class RaviProductListSeeder extends Seeder
             defaultVariantLabel: $row['size'],
         );
 
-        if ($row['image']) {
-            $this->addPhoto($product, self::PHOTO_PATH.$row['image'], $row['name']);
+        if ($row['image'] && empty($product->images)) {
+            $product->update(['images' => [$this->storeInMediaLibrary('Products', public_path('assets/images/'.$row['image']))]]);
         }
-    }
-
-    /**
-     * Replaces only a photo this seeder added, never one uploaded in the admin.
-     */
-    private function addPhoto(Product $product, string $path, string $alt): void
-    {
-        $current = $product->load('images')->imagesIn('gallery')->pluck('path');
-
-        if ($current->all() === [$path] || $current->contains(fn (string $existing): bool => ! Str::startsWith($existing, self::PHOTO_PATH.'products/'))) {
-            return;
-        }
-
-        $this->images->clear($product, 'gallery');
-        $this->images->attach($product, 'gallery', $path, ['alt' => $alt, 'is_primary' => true, 'sort_order' => 0]);
     }
 
     /**

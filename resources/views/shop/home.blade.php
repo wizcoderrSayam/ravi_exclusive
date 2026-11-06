@@ -384,7 +384,7 @@
           <p> 22, Katra Jaimal Singh</p>
           <p>Amritsar, Punjab, India – 143001</p>
           <p class="mt-10">
-            Ph: <a href="tel:+{{ $storeWhatsApp['digits'] }}">{{ $storeWhatsApp['display'] }}</a>
+            Ph: <a href="tel:+{{ $storeWhatsApp->digits }}">{{ $storeWhatsApp->display }}</a>
           </p>
           <a
             class="btn"

@@ -2,32 +2,37 @@
 
 namespace Tests\Feature;
 
-use Carepeerinfotech\Ecommerce\Models\Image;
-use Carepeerinfotech\Ecommerce\Models\Product;
-use Carepeerinfotech\Ecommerce\Models\ProductVariant;
-use Carepeerinfotech\Ecommerce\Services\Media\ImageService;
 use Database\Seeders\RaviProductListSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
+use Peer\CMS\Models\Media;
+use Peer\Ecommerce\Models\Product;
+use Peer\Ecommerce\Models\ProductVariant;
 use Tests\TestCase;
 
 class RaviProductListSeederTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Storage::fake(config('cms.media.disk'));
+    }
+
     public function test_it_seeds_every_product_from_the_export_with_its_photo(): void
     {
-        $before = Product::count();
-
         $this->seed(RaviProductListSeeder::class);
 
-        $products = Product::query()->where('brand', 'Ravi Exclusive')->whereIn('slug', $this->seededSlugs())->with('images')->get();
+        $products = Product::query()->where('brand', 'Ravi Exclusive')->whereIn('slug', $this->seededSlugs())->get();
 
-        $this->assertSame(49, Product::count() - $before);
+        $this->assertSame(49, Product::count());
         $this->assertCount(49, $products);
         $this->assertSame(48, $products->filter(fn (Product $product): bool => $product->primaryImageUrl() !== null)->count());
 
         foreach ($products->filter(fn (Product $product): bool => $product->primaryImageUrl() !== null) as $product) {
-            $this->assertFileExists(public_path($product->primaryImageUrl()), $product->name);
+            Storage::disk(config('cms.media.disk'))->assertExists($product->images[0]);
         }
     }
 
@@ -37,15 +42,16 @@ class RaviProductListSeederTest extends TestCase
 
         $product = Product::firstWhere('slug', 'ivory-royal-heritage-sharara-set');
         $variant = $product->variants()->sole();
+        $category = $product->categories->sole();
 
-        $this->assertSame('girls-sharara-palazzo', $product->category->slug);
-        $this->assertSame('girls', $product->category->parent->slug);
+        $this->assertSame('Sharara / Palazzo', $category->name);
+        $this->assertSame('girls', $category->parent->slug);
         $this->assertSame('RE-00041', $product->sku);
         $this->assertSame('4177.00', (string) $product->price);
         $this->assertSame('24 to 38', $variant->option_label);
         $this->assertSame(['Size' => '24 to 38'], $variant->option_values);
         $this->assertTrue((bool) $variant->is_default);
-        $this->assertSame('/assets/images/products/ivory-royal-heritage-sharara-set.webp', $product->load('images')->primaryImageUrl());
+        $this->assertSame(['Products/ivory-royal-heritage-sharara-set.webp'], $product->images);
 
         $this->get(route('shop.product', $product->slug))
             ->assertOk()
@@ -64,23 +70,22 @@ class RaviProductListSeederTest extends TestCase
     public function test_it_is_safe_to_re_run(): void
     {
         $this->seed(RaviProductListSeeder::class);
-        $counts = [Product::count(), ProductVariant::count(), Image::count()];
+        $counts = [Product::count(), ProductVariant::count(), Media::count()];
 
         $this->seed(RaviProductListSeeder::class);
 
-        $this->assertSame($counts, [Product::count(), ProductVariant::count(), Image::count()]);
+        $this->assertSame($counts, [Product::count(), ProductVariant::count(), Media::count()]);
     }
 
-    public function test_a_photo_uploaded_in_the_admin_is_kept(): void
+    public function test_a_photo_chosen_in_the_admin_is_kept(): void
     {
         $this->seed(RaviProductListSeeder::class);
         $product = Product::firstWhere('slug', 'ivory-royal-heritage-sharara-set');
-        app(ImageService::class)->clear($product, 'gallery');
-        app(ImageService::class)->attach($product, 'gallery', 'products/uploaded-in-admin.jpg', ['is_primary' => true]);
+        $product->update(['images' => ['Products/chosen-in-admin.jpg']]);
 
         $this->seed(RaviProductListSeeder::class);
 
-        $this->assertSame(['products/uploaded-in-admin.jpg'], $product->load('images')->imagesIn('gallery')->pluck('path')->all());
+        $this->assertSame(['Products/chosen-in-admin.jpg'], $product->fresh()->images);
     }
 
     /**

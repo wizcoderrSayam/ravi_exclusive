@@ -3,16 +3,13 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-use Carepeerinfotech\Ecommerce\Database\Seeders\EcommerceSeeder;
-use Carepeerinfotech\Ecommerce\Models\Role;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Peer\Ecommerce\Database\Seeders\EcommerceSeeder;
+use Peer\Ecommerce\Models\Role;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
     /**
      * Seed the application's database. Every seeder here is safe to re-run.
      */
@@ -23,16 +20,15 @@ class DatabaseSeeder extends Seeder
             'password' => Hash::make('password'),
         ]);
 
-        // The package seeder resets store settings to its defaults, so only run it
-        // on a fresh install; afterwards, settings belong to the admin.
-        if (! Role::query()->exists()) {
+        // Only on a fresh install; afterwards, roles and email templates belong to the
+        // admin. Checks for this role because the package's migrations create others.
+        if (! Role::query()->where('slug', 'super-admin')->exists()) {
             $this->call(EcommerceSeeder::class);
         }
 
         $this->call([
             StorefrontCategorySeeder::class,
             RaviProductListSeeder::class,
-            HomepageContentSeeder::class,
             CmsPageSeeder::class,
         ]);
     }

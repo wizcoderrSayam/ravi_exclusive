@@ -16,5 +16,5 @@
       <a href="{{ route('shop.wishlist') }}">Wishlist</a>
     </details>
   </div>
-  <div class="mnav-help">Need help? <a href="tel:+{{ $storeWhatsApp['digits'] }}">{{ $storeWhatsApp['display'] }}</a></div>
+  <div class="mnav-help">Need help? <a href="tel:+{{ $storeWhatsApp->digits }}">{{ $storeWhatsApp->display }}</a></div>
 </div>

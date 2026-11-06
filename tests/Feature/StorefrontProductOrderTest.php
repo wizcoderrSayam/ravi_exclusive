@@ -2,9 +2,10 @@
 
 namespace Tests\Feature;
 
-use Carepeerinfotech\Ecommerce\Models\Product;
 use Database\Seeders\RaviProductListSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
+use Peer\Ecommerce\Models\Product;
 use Tests\TestCase;
 
 class StorefrontProductOrderTest extends TestCase
@@ -13,6 +14,7 @@ class StorefrontProductOrderTest extends TestCase
 
     public function test_listing_pages_show_the_latest_products_first(): void
     {
+        Storage::fake(config('cms.media.disk'));
         $this->seed(RaviProductListSeeder::class);
 
         // Neither id order matches the creation order, so only created_at can produce it.

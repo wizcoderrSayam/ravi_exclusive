@@ -2,12 +2,12 @@
 
 namespace Tests\Feature;
 
-use Carepeerinfotech\Ecommerce\Models\Category;
-use Carepeerinfotech\Ecommerce\Models\Product;
-use Carepeerinfotech\Ecommerce\Services\Catalog\ProductCatalogService;
-use Carepeerinfotech\Ecommerce\Services\Catalog\ProductSpreadsheetService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Peer\CMS\Models\Category;
+use Peer\Ecommerce\Models\Product;
+use Peer\Ecommerce\Services\Catalog\ProductCatalogService;
+use Peer\Ecommerce\Services\Catalog\ProductSpreadsheetService;
 use PhpOffice\PhpSpreadsheet\Cell\Cell;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -27,13 +27,13 @@ class ProductSpreadsheetCategoryTest extends TestCase
     {
         parent::setUp();
 
-        $men = Category::create(['name' => 'Men', 'sort_order' => 0]);
-        $boys = Category::create(['name' => 'Boys', 'sort_order' => 1]);
-        $this->menIndoWesterns = Category::create(['name' => 'Indo-Westerns', 'slug' => 'men-indo-westerns', 'parent_id' => $men->id]);
-        $this->boysIndoWesterns = Category::create(['name' => 'Indo-Westerns', 'slug' => 'boys-indo-westerns', 'parent_id' => $boys->id]);
+        $men = Category::create(['name' => 'Men']);
+        $boys = Category::create(['name' => 'Boys']);
+        $this->menIndoWesterns = Category::create(['name' => 'Indo-Westerns', 'parent_id' => $men->id]);
+        $this->boysIndoWesterns = Category::create(['name' => 'Indo-Westerns', 'parent_id' => $boys->id]);
 
         $this->product = app(ProductCatalogService::class)->save(new Product, [
-            'category_id' => $this->menIndoWesterns->id,
+            'category_ids' => [$this->menIndoWesterns->id],
             'name' => 'Gota Patti Indo-Western',
             'slug' => 'gota-patti-indo-western',
             'sku' => 'RE-0047',
@@ -55,7 +55,7 @@ class ProductSpreadsheetCategoryTest extends TestCase
         $result = $this->importWithCategory('Boys > Indo-Westerns');
 
         $this->assertSame([], $result['errors']);
-        $this->assertSame($this->boysIndoWesterns->id, $this->product->fresh()->category_id);
+        $this->assertSame([$this->boysIndoWesterns->id], $this->product->fresh()->categories->modelKeys());
     }
 
     public function test_import_rejects_a_subcategory_name_shared_by_several_parents(): void
@@ -64,15 +64,23 @@ class ProductSpreadsheetCategoryTest extends TestCase
 
         $this->assertNotSame([], $result['errors']);
         $this->assertStringContainsString('matches more than one category', implode(' ', array_map('json_encode', $result['errors'])));
-        $this->assertSame($this->menIndoWesterns->id, $this->product->fresh()->category_id);
+        $this->assertSame([$this->menIndoWesterns->id], $this->product->fresh()->categories->modelKeys());
     }
 
     public function test_import_accepts_a_category_slug(): void
     {
-        $result = $this->importWithCategory('boys-indo-westerns');
+        $result = $this->importWithCategory($this->boysIndoWesterns->slug);
 
         $this->assertSame([], $result['errors']);
-        $this->assertSame($this->boysIndoWesterns->id, $this->product->fresh()->category_id);
+        $this->assertSame([$this->boysIndoWesterns->id], $this->product->fresh()->categories->modelKeys());
+    }
+
+    public function test_an_export_can_be_imported_again_without_moving_any_product(): void
+    {
+        $result = $this->importWithCategory('Men › Indo-Westerns');
+
+        $this->assertSame([], $result['errors']);
+        $this->assertSame([$this->menIndoWesterns->id], $this->product->fresh()->categories->modelKeys());
     }
 
     private function exportedSheet(): Spreadsheet

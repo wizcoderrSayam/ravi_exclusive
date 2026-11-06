@@ -3,13 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\View\Components\ProductCard;
-use Carepeerinfotech\Ecommerce\Models\Category;
-use Carepeerinfotech\Ecommerce\Models\Product;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
+use Peer\CMS\Models\Category;
+use Peer\Ecommerce\Models\CategoryMedia;
+use Peer\Ecommerce\Models\Product;
 
 /**
  * Listing pages render every matching product; public/assets/js/main.js then
@@ -37,6 +37,14 @@ class StorefrontController extends Controller
         'boys' => 'Shop for Boys',
         'men' => 'Shop for Men',
         'women' => 'Shop for Women',
+    ];
+
+    /** Each listing page's introduction. Here because the CMS's categories only hold a name and a parent. */
+    private const CATEGORY_DESCRIPTIONS = [
+        'girls' => 'Lehengas, sharara and palazzo suits, Patiala salwar suits, frocks and gowns for girls aged 1 to 14, from their first festive outfit to the big family wedding.',
+        'boys' => 'Sherwanis, indo-westerns, coat suits, jodhpuris, kurta pajamas and waistcoat sets for boys aged 1 to 14, so the little ones match the baraat.',
+        'men' => 'Kurta pajamas, waistcoat sets and indo-westerns for the groom, the baraat and every festive occasion in between.',
+        'women' => 'Ethnic co-ord sets for women: hand-picked occasion wear from the heart of Amritsar.',
     ];
 
     /** Kids' rows are a carousel of category cards; the rest keep the intro panel and tile grid. */
@@ -87,7 +95,7 @@ class StorefrontController extends Controller
         return view('shop.wishlist', ['products' => $this->productQuery()->get()]);
     }
 
-    /** A product's own page; inactive products, or ones in an inactive category, are not found. */
+    /** A product's own page; inactive products, or ones without a category, are not found. */
     public function product(string $slug): View
     {
         $product = $this->productQuery()->where('slug', $slug)->firstOrFail();
@@ -100,7 +108,7 @@ class StorefrontController extends Controller
             'categoryUrl' => in_array($card->categorySlug, self::CATEGORY_PAGES, true) ? route('shop.'.$card->categorySlug) : null,
             'gallery' => $product->galleryFor(),
             'related' => $this->productQuery()
-                ->where('category_id', $product->category_id)
+                ->whereHas('categories', fn (Builder $categories) => $categories->whereKey($product->categories->modelKeys()))
                 ->whereKeyNot($product->id)
                 ->take(self::RELATED_PRODUCTS)
                 ->get(),
@@ -158,36 +166,41 @@ class StorefrontController extends Controller
     private function category(string $slug): View
     {
         $category = Category::query()
-            ->active()
             ->whereNull('parent_id')
             ->where('slug', $slug)
-            ->with(['children' => fn ($children) => $children->active()])
+            ->with(['children' => fn ($children) => $children->orderBy('id')])
             ->firstOrFail();
 
         return view('shop.category', [
             'category' => $category,
-            'products' => $this->productQuery()
-                ->whereIn('category_id', $category->children->pluck('id')->push($category->id))
-                ->get(),
+            'categoryDescription' => self::CATEGORY_DESCRIPTIONS[$slug],
+            'products' => $this->productQuery()->inCategoryTree($category->id)->get(),
         ]);
     }
 
     /**
-     * Each active top-level category, introduced by its name and description, with
-     * its active subcategories as tiles. A tile links to its parent's listing with
-     * the subcategory filter preselected.
+     * Each top-level category, introduced by its name and description, with its
+     * subcategories as tiles. A tile links to its parent's listing with the
+     * subcategory filter preselected.
      *
      * @return list<array{title: string, name: string, description: ?string, url: string, layout: 'carousel'|'band', tiles: list<array{name: string, image: ?string, url: string}>}>
      */
     private function shopSections(): array
     {
         $parents = Category::query()
-            ->active()
             ->whereNull('parent_id')
             ->whereIn('slug', array_keys(self::HOME_SHOP_SECTIONS))
-            ->with(['children' => fn ($children) => $children->active()->with('images')])
+            ->with(['children' => fn ($children) => $children->orderBy('id')])
             ->get()
             ->keyBy('slug');
+
+        $images = CategoryMedia::query()
+            ->whereIn('category_id', $parents->flatMap->children->pluck('id'))
+            ->where('mime_type', 'like', 'image/%')
+            ->ordered()
+            ->get()
+            ->unique('category_id')
+            ->keyBy('category_id');
 
         $sections = [];
 
@@ -203,13 +216,13 @@ class StorefrontController extends Controller
             $sections[] = [
                 'title' => $title,
                 'name' => $parent->name,
-                'description' => $parent->description,
+                'description' => self::CATEGORY_DESCRIPTIONS[$slug],
                 'url' => $parentUrl,
                 'layout' => in_array($slug, self::HOME_CAROUSEL_SECTIONS, true) ? 'carousel' : 'band',
                 'tiles' => $parent->children->map(fn (Category $subcategory): array => [
                     'name' => $subcategory->name,
-                    'image' => $subcategory->imageUrl(),
-                    'url' => $parentUrl.'#'.Str::after($subcategory->slug, $slug.'-'),
+                    'image' => $images->get($subcategory->id)?->url(),
+                    'url' => $parentUrl.'#'.ProductCard::subcategoryFilter($subcategory->name),
                 ])->all(),
             ];
         }
@@ -227,7 +240,7 @@ class StorefrontController extends Controller
     }
 
     /**
-     * Active products in active categories, with what a product card needs, newest first.
+     * Active products that have a category, with what a product card needs, newest first.
      *
      * @return Builder<Product>
      */
@@ -235,10 +248,9 @@ class StorefrontController extends Controller
     {
         return Product::query()
             ->active()
-            ->whereHas('category', fn (Builder $category) => $category->active())
+            ->has('categories')
             ->with([
-                'category.parent',
-                'images',
+                'categories.parent',
                 'variants' => fn ($variants) => $variants->orderBy('id'),
             ])
             ->latest()

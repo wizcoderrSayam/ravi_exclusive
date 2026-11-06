@@ -2,45 +2,52 @@
 
 namespace Tests\Feature;
 
-use Carepeerinfotech\Ecommerce\Models\Category;
-use Carepeerinfotech\Ecommerce\Models\Image;
-use Carepeerinfotech\Ecommerce\Models\Product;
 use Database\Seeders\RaviProductListSeeder;
 use Database\Seeders\StorefrontCategorySeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
+use Peer\CMS\Models\Category;
+use Peer\Ecommerce\Models\CategoryMedia;
+use Peer\Ecommerce\Models\Product;
 use Tests\TestCase;
 
 class StorefrontCategorySeederTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Storage::fake(config('cms.media.disk'));
+    }
+
     public function test_it_seeds_the_backup_category_tree_and_images_without_products(): void
     {
         $this->seed(StorefrontCategorySeeder::class);
 
-        $topLevel = Category::query()->whereNull('parent_id')->orderBy('sort_order')->get();
+        $topLevel = Category::query()->whereNull('parent_id')->orderBy('id')->get();
 
         $this->assertSame(['girls', 'boys', 'men', 'women'], $topLevel->pluck('slug')->all());
         $this->assertSame(14, Category::query()->whereNotNull('parent_id')->count());
         $this->assertSame(
             ['Lehenga', 'Sharara / Palazzo', 'Patiala Salwar Suits / Farshi Salwar', 'Frocks & Gowns'],
-            $topLevel->firstWhere('slug', 'girls')->children->pluck('name')->all(),
+            $topLevel->firstWhere('slug', 'girls')->children()->orderBy('id')->pluck('name')->all(),
         );
         $this->assertSame(
             ['Kurta Pajamas', 'Waistcoat Sets', 'Indo-Westerns'],
-            $topLevel->firstWhere('slug', 'men')->children->pluck('name')->all(),
+            $topLevel->firstWhere('slug', 'men')->children()->orderBy('id')->pluck('name')->all(),
         );
-        $this->assertSame('Indo-Westerns for Men | Ravi Exclusive Amritsar', Category::firstWhere('slug', 'men-indo-westerns')->meta_title);
-        $this->assertSame('/assets/images/categories/boys.jpg', Category::firstWhere('slug', 'boys')->imageUrl());
-        $this->assertSame('/assets/images/categories/girls-patiala-farshi-salwar.webp', Category::firstWhere('slug', 'girls-patiala-farshi-salwar')->imageUrl());
 
-        foreach (Category::with('images')->get() as $category) {
-            $this->assertNotNull($category->imageUrl(), "{$category->slug} has no image");
-            $this->assertFileExists(public_path($category->imageUrl()), "{$category->slug} image is missing");
-            $this->assertCount(1, $category->imagesIn('image'), "{$category->slug} should have one category image");
+        $this->assertSame('Categories/boys.jpg', CategoryMedia::where('category_id', $topLevel->firstWhere('slug', 'boys')->id)->sole()->path);
+
+        foreach (Category::all() as $category) {
+            $image = CategoryMedia::where('category_id', $category->id)->sole();
+            Storage::disk(config('cms.media.disk'))->assertExists($image->path);
+            $this->assertStringStartsWith('image/', $image->mime_type, "{$category->name} has no image");
         }
 
-        $this->assertSame(18, Image::query()->where('collection', 'image')->count());
+        $this->assertSame(18, CategoryMedia::count());
         $this->assertSame(0, Product::count());
     }
 
@@ -50,19 +57,29 @@ class StorefrontCategorySeederTest extends TestCase
         $this->seed(StorefrontCategorySeeder::class);
 
         $this->assertSame(18, Category::count());
-        $this->assertSame(18, Image::query()->where('collection', 'image')->count());
+        $this->assertSame(18, CategoryMedia::count());
+    }
+
+    public function test_a_photo_chosen_in_the_admin_is_kept(): void
+    {
+        $this->seed(StorefrontCategorySeeder::class);
+        $boys = Category::firstWhere('slug', 'boys');
+        CategoryMedia::where('category_id', $boys->id)->update(['path' => 'Categories/chosen-in-admin.jpg']);
+
+        $this->seed(StorefrontCategorySeeder::class);
+
+        $this->assertSame('Categories/chosen-in-admin.jpg', CategoryMedia::where('category_id', $boys->id)->sole()->path);
     }
 
     public function test_ravi_products_use_the_backup_categories(): void
     {
         $this->seed([StorefrontCategorySeeder::class, RaviProductListSeeder::class]);
 
-        $product = Product::firstWhere('slug', 'ivory-royal-heritage-sharara-set');
+        $category = Product::firstWhere('slug', 'ivory-royal-heritage-sharara-set')->categories->sole();
 
         $this->assertSame(18, Category::count());
         $this->assertSame(49, Product::count());
-        $this->assertSame('girls-sharara-palazzo', $product->category->slug);
-        $this->assertSame('girls', $product->category->parent->slug);
-        $this->assertSame('Lehengas, sharara and palazzo suits, Patiala salwar suits, frocks and gowns for girls aged 1 to 14, from their first festive outfit to the big family wedding.', $product->category->parent->description);
+        $this->assertSame('sharara-palazzo', $category->slug);
+        $this->assertSame('girls', $category->parent->slug);
     }
 }

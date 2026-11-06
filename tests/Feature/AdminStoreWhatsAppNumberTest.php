@@ -3,14 +3,14 @@
 namespace Tests\Feature;
 
 use App\Models\User;
-use Carepeerinfotech\Ecommerce\Database\Seeders\EcommerceSeeder;
-use Carepeerinfotech\Ecommerce\Models\Product;
-use Carepeerinfotech\Ecommerce\Models\Role;
-use Carepeerinfotech\Ecommerce\Models\Setting;
-use Carepeerinfotech\Ecommerce\Services\Settings\SettingsService;
+use App\View\StoreWhatsApp;
 use Database\Seeders\RaviProductListSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
+use Peer\Ecommerce\Database\Seeders\EcommerceSeeder;
+use Peer\Ecommerce\Models\Product;
+use Peer\Ecommerce\Models\Role;
+use Peer\Ecommerce\Support\StoreSettings;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -18,33 +18,37 @@ class AdminStoreWhatsAppNumberTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_the_settings_page_starts_with_the_stores_existing_number(): void
+    public function test_the_setting_starts_with_the_stores_original_number(): void
+    {
+        $this->assertSame('+91-814-814-62-62', StoreSettings::get('general.whatsapp_number'));
+    }
+
+    public function test_the_field_is_in_the_cms_general_settings(): void
     {
         $this->actingAs($this->admin())
-            ->get(route('admin.settings.index'))
+            ->get(route('cms.panel.settings.index'))
             ->assertOk()
-            ->assertSee('WhatsApp number')
-            ->assertSee('value="+91-814-814-62-62"', false);
+            ->assertSee('WhatsApp number');
     }
 
     public function test_an_admin_can_change_the_number(): void
     {
         $this->actingAs($this->admin())
-            ->postJson(route('admin.settings.update'), $this->commerceSettings('+44 7700 900123'))
+            ->putJson(route('cms.panel.settings.update'), ['general' => ['whatsapp_number' => '+44 7700 900123']])
             ->assertOk();
 
-        $this->assertSame('+44 7700 900123', app(SettingsService::class)->get('commerce', 'whatsapp_number'));
+        $this->assertSame('+44 7700 900123', StoreSettings::get('general.whatsapp_number'));
     }
 
     #[DataProvider('invalidNumbers')]
     public function test_an_unusable_number_is_rejected_and_the_old_one_is_kept(string $number): void
     {
         $this->actingAs($this->admin())
-            ->postJson(route('admin.settings.update'), $this->commerceSettings($number))
+            ->putJson(route('cms.panel.settings.update'), ['general' => ['whatsapp_number' => $number]])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors('whatsapp_number');
+            ->assertJsonValidationErrors('general.whatsapp_number');
 
-        $this->assertSame('+91-814-814-62-62', app(SettingsService::class)->get('commerce', 'whatsapp_number'));
+        $this->assertSame('+91-814-814-62-62', StoreSettings::get('general.whatsapp_number'));
     }
 
     /**
@@ -63,10 +67,12 @@ class AdminStoreWhatsAppNumberTest extends TestCase
 
     public function test_the_storefront_uses_the_saved_number_everywhere(): void
     {
+        Storage::fake(config('cms.media.disk'));
         $this->seed(RaviProductListSeeder::class);
-        // Seeded descriptions quote the number as plain text, which the setting does not rewrite.
-        Product::query()->update(['description' => '']);
-        app(SettingsService::class)->set('commerce', 'whatsapp_number', '+44 7700 900123');
+        StoreSettings::set('general.whatsapp_number', '+44 7700 900123');
+
+        // The seeded descriptions quote the original number, so this covers them too.
+        $product = Product::query()->where('description', 'like', '%'.StoreWhatsApp::ORIGINAL_NUMBER.'%')->firstOrFail();
 
         $home = $this->get(route('shop.home'));
         $home->assertOk();
@@ -76,25 +82,14 @@ class AdminStoreWhatsAppNumberTest extends TestCase
         $home->assertSee('href="tel:+447700900123"', false);
         $home->assertSee('+44 7700 900123');
         $home->assertDontSee('8148146262');
-        $home->assertDontSee('+91-814-814-62-62');
+        $home->assertDontSee(StoreWhatsApp::ORIGINAL_NUMBER);
 
-        $productPage = $this->get(route('shop.product', Product::query()->firstOrFail()->slug));
+        $productPage = $this->get(route('shop.product', $product->slug));
         $productPage->assertOk();
         $productPage->assertSee('<a href="tel:+447700900123" class="text-red">+44 7700 900123</a>', false);
+        $productPage->assertSee('WhatsApp us on +44 7700 900123');
         $productPage->assertDontSee('8148146262');
-        $productPage->assertDontSee('+91-814-814-62-62');
-    }
-
-    public function test_the_storefront_keeps_a_working_number_when_the_setting_is_missing(): void
-    {
-        Setting::query()->where('group', 'commerce')->where('key', 'whatsapp_number')->delete();
-        Cache::forget('settings.group.commerce');
-
-        $this->get(route('shop.home'))
-            ->assertOk()
-            ->assertSee('data-whatsapp="918148146262"', false)
-            ->assertSee('href="https://wa.me/918148146262"', false)
-            ->assertSee('href="tel:+918148146262"', false);
+        $productPage->assertDontSee(StoreWhatsApp::ORIGINAL_NUMBER);
     }
 
     private function admin(): User
@@ -106,21 +101,5 @@ class AdminStoreWhatsAppNumberTest extends TestCase
         $admin->roles()->attach(Role::firstWhere('slug', 'super-admin'));
 
         return $admin;
-    }
-
-    /**
-     * @return array{group: string, country: string, store_name: string, support_email: string, gst_percent: int, pickup_pincode: string, whatsapp_number: string}
-     */
-    private function commerceSettings(string $whatsappNumber): array
-    {
-        return [
-            'group' => 'commerce',
-            'country' => 'IN',
-            'store_name' => 'Ravi Exclusive',
-            'support_email' => 'care@example.com',
-            'gst_percent' => 18,
-            'pickup_pincode' => '143001',
-            'whatsapp_number' => $whatsappNumber,
-        ];
     }
 }

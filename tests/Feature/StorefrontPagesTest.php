@@ -2,22 +2,36 @@
 
 namespace Tests\Feature;
 
-use Carepeerinfotech\Ecommerce\Models\Category;
-use Carepeerinfotech\Ecommerce\Models\Product;
-use Database\Seeders\StorefrontCatalogSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Peer\Ecommerce\Models\Product;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Concerns\BuildsStorefrontCatalog;
 use Tests\TestCase;
 
 class StorefrontPagesTest extends TestCase
 {
+    use BuildsStorefrontCatalog;
     use RefreshDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->seed(StorefrontCatalogSeeder::class);
+        $this->seedCategoryTree();
+
+        $indoWesterns = $this->subcategory('Men', 'Indo-Westerns');
+        $this->makeProduct('Festive Sherwani', $indoWesterns, 'RE-0035', 5399, ['S', 'M', 'L', 'XL', 'XXL', '3XL'], [
+            'compare_price' => 7199,
+            'short_description' => 'Fabric: Silk Blend',
+        ]);
+        $this->makeProduct('Pure Silk Sherwani', $indoWesterns, 'RE-0036', 9999);
+
+        $kurtas = $this->subcategory('Boys', 'Kurta Pajama');
+        foreach (['Ivory Embroidered Kurta Set', 'Navy Kurta Set', 'Rust Kurta Set', 'Olive Kurta Set'] as $index => $name) {
+            $this->makeProduct($name, $kurtas, 'RE-01'.$index, 2499, attributes: ['is_featured' => true]);
+        }
+
+        Product::query()->whereIn('name', ['Festive Sherwani', 'Pure Silk Sherwani'])->update(['created_at' => now()->subYear()]);
     }
 
     /**
@@ -98,17 +112,14 @@ class StorefrontPagesTest extends TestCase
 
     public function test_category_page_lists_its_products_from_the_database(): void
     {
-        $boys = Category::firstWhere('slug', 'boys');
-        $boysProductCount = Product::whereIn('category_id', $boys->children()->pluck('id'))->count();
-
         $response = $this->get(route('shop.boys'));
 
         $response->assertOk();
-        $this->assertSame(22, $boysProductCount);
-        $this->assertSame($boysProductCount, substr_count($response->getContent(), '<article class="pcard"'));
-        $response->assertSee('<span class="count" id="count">22 items</span>', false);
+        $this->assertSame(4, substr_count($response->getContent(), '<article class="pcard"'));
+        $response->assertSee('<span class="count" id="count">4 items</span>', false);
         $response->assertSee('Ivory Embroidered Kurta Set');
-        $response->assertDontSee('Festive Sherwani');
+        // Not assertDontSee('Festive Sherwani'): the header's search index names every product on every page.
+        $response->assertDontSee('data-name="Festive Sherwani"', false);
         $response->assertSee('<div class="empty" id="emptyMsg"  hidden >', false);
     }
 
@@ -130,7 +141,7 @@ class StorefrontPagesTest extends TestCase
         $response->assertSee('data-sub="Indo-Westerns" data-sub-slug="indo-westerns" data-price="5399" data-mrp="7199" data-new="0"', false);
         $response->assertSee('data-stock="1" data-fabric="Silk Blend"', false);
         $response->assertSee('data-sizes="S|M|L|XL|XXL|3XL" data-search="festive sherwani indo-westerns men silk blend"', false);
-        $response->assertSee('<img class="ph" src="/assets/images/categories/men-indo-westerns.webp" alt="Festive Sherwani"', false);
+        $response->assertSee('<img class="ph" src="'.$sherwani->primaryImageUrl().'" alt="Festive Sherwani"', false);
         $response->assertSee('<span class="ptag off">25% off</span>', false);
         $response->assertSee('<div class="price"><b>₹5,399</b><span class="price-from">onwards</span><s>₹7,199</s><em>25% off</em></div>', false);
     }
@@ -158,7 +169,7 @@ class StorefrontPagesTest extends TestCase
         $this->assertGreaterThan(0, $recent);
         $this->assertLessThan(Product::count(), $recent);
         $this->assertSame($recent, substr_count($response->getContent(), '<article class="pcard"'));
-        $response->assertDontSee('Festive Sherwani');
+        $response->assertDontSee('data-name="Festive Sherwani"', false);
     }
 
     public function test_home_shows_four_new_arrivals_and_the_bestsellers(): void
@@ -166,6 +177,7 @@ class StorefrontPagesTest extends TestCase
         $response = $this->get(route('shop.home'));
 
         $this->assertSame(8, substr_count($response->getContent(), '<article class="pcard"'));
+        $this->assertSame(4, Product::featured()->count());
         foreach (Product::featured()->pluck('name') as $bestseller) {
             $response->assertSee($bestseller);
         }
