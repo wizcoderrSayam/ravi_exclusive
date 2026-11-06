@@ -212,12 +212,6 @@
                 "php": "^8.3",
                 "phpoffice/phpspreadsheet": "^5.10"
             },
-            "conflict": {
-                "carepeerinfotech/cms": "<2.5"
-            },
-            "suggest": {
-                "carepeerinfotech/cms": "^2.5: settings, categories, the media library and the admin panel, bound to the package's contracts (src/Integrations/Cms). Without it, bind the contracts in your app."
-            },
             "type": "library",
             "extra": {
                 "laravel": {
