@@ -141,65 +141,6 @@
             "time": "2026-09-06T14:11:38+00:00"
         },
         {
-            "name": "carepeerinfotech/cms",
-            "version": "dev-main",
-            "source": {
-                "type": "git",
-                "url": "git@github.com:carepeerinfotech/cms.git",
-                "reference": "7f9f5749ffb06d8d77af03cc01feacadfd230723"
-            },
-            "require": {
-                "laravel/framework": "^13.17",
-                "php": "^8.3"
-            },
-            "require-dev": {
-                "fakerphp/faker": "^1.23",
-                "laravel/pint": "^1.27",
-                "mockery/mockery": "^1.6",
-                "orchestra/testbench": "^11.0",
-                "phpunit/phpunit": "^12.5.12"
-            },
-            "default-branch": true,
-            "type": "library",
-            "extra": {
-                "branch-alias": {
-                    "dev-main": "2.x-dev"
-                },
-                "laravel": {
-                    "providers": [
-                        "Peer\\CMS\\CMSServiceProvider"
-                    ],
-                    "aliases": {
-                        "CMS": "Peer\\CMS\\Facades\\CMS"
-                    }
-                }
-            },
-            "autoload": {
-                "psr-4": {
-                    "Peer\\CMS\\": "src/",
-                    "Peer\\CMS\\Database\\Factories\\": "database/factories/",
-                    "Peer\\CMS\\Database\\Seeders\\": "database/seeders/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "Peer\\CMS\\Tests\\": "tests/",
-                    "Workbench\\App\\": "workbench/app/",
-                    "Workbench\\Database\\Factories\\": "workbench/database/factories/"
-                }
-            },
-            "scripts": {
-                "test": [
-                    "@php vendor/bin/phpunit"
-                ]
-            },
-            "license": [
-                "proprietary"
-            ],
-            "description": "GrapesJS CMS for Laravel: pages, blogs, media, layouts, forms and settings, managed from one panel.",
-            "time": "2026-11-06T06:27:39+00:00"
-        },
-        {
             "name": "carepeerinfotech/ecommerce",
             "version": "dev-main",
             "dist": {
