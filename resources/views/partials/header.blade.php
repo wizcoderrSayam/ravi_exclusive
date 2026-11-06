@@ -1,5 +1,5 @@
 <div class="topbar"><span class="pa">ਜੀ ਆਇਆਂ ਨੂੰ</span> · Welcome to Ravi Exclusive, Katra Jaimal Singh, Amritsar ·
-    WhatsApp <a href="tel:+918148146262">+91-814-814-62-62</a></div>
+    WhatsApp <a href="tel:+{{ $storeWhatsApp['digits'] }}">{{ $storeWhatsApp['display'] }}</a></div>
 
   <header class="site-header">
     <div class="container">

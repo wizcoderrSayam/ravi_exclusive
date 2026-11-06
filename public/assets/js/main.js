@@ -9,8 +9,7 @@
   /* ---------- STORE SETTINGS — edit these ---------- */
   const STORE = {
     name: "Ravi Exclusive",
-    whatsapp: "918148146262", // used for checkout orders
-    phone: "+91-814-814-62-62"
+    whatsapp: document.body.dataset.whatsapp // used for checkout orders, set under Admin > Settings
   };
 
   /* ---------- helpers ---------- */

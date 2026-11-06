@@ -6,6 +6,7 @@ use App\Http\Controllers\StorefrontController;
 use App\View\Components\ProductCard;
 use Carepeerinfotech\Ecommerce\Models\Category;
 use Carepeerinfotech\Ecommerce\Models\Product;
+use Carepeerinfotech\Ecommerce\Services\Settings\SettingsService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -13,6 +14,9 @@ use Illuminate\Support\Str;
 
 class AppServiceProvider extends ServiceProvider
 {
+    /** Keeps WhatsApp orders reaching the store if the setting is missing, such as after restoring an older backup. */
+    private const DEFAULT_WHATSAPP_NUMBER = '+91-814-814-62-62';
+
     /**
      * Register any application services.
      */
@@ -20,6 +24,7 @@ class AppServiceProvider extends ServiceProvider
     {
         // Scoped rather than once(): long-lived workers must rebuild the menu for each request or job.
         $this->app->scoped('storefront.menu', fn (): array => $this->menuCategories());
+        $this->app->scoped('storefront.whatsapp', fn (): array => $this->storeWhatsApp());
     }
 
     /**
@@ -32,6 +37,26 @@ class AppServiceProvider extends ServiceProvider
 
         // The desktop mega menu and the mobile menu list the same categories, so both share one query per request.
         View::composer(['partials.header', 'partials.mobile-nav'], fn ($view) => $view->with('menuCategories', $this->app->make('storefront.menu')));
+
+        View::composer(
+            ['layouts.app', 'partials.header', 'partials.mobile-nav', 'partials.footer', 'shop.home', 'shop.product'],
+            fn ($view) => $view->with('storeWhatsApp', $this->app->make('storefront.whatsapp'))
+        );
+    }
+
+    /**
+     * The WhatsApp number set under Admin > Settings: as typed for display, and as digits for tel: and wa.me links.
+     *
+     * @return array{display: string, digits: string}
+     */
+    private function storeWhatsApp(): array
+    {
+        $number = $this->app->make(SettingsService::class)->get('commerce', 'whatsapp_number') ?: self::DEFAULT_WHATSAPP_NUMBER;
+
+        return [
+            'display' => $number,
+            'digits' => preg_replace('/\D/', '', $number),
+        ];
     }
 
     /**
