@@ -18,9 +18,9 @@ class CmsPageSeeder extends Seeder
 {
     private const ADDRESS = 'M/s Ravi Exclusif,  22, Katra Jaimal Singh, Amritsar, Amritsar, Punjab, India – 143001';
 
-    private const PHONE = '+91-814-814-62-62';
+    private const PHONE = '+91 99150 18282';
 
-    private const WHATSAPP_URL = 'https://wa.me/918148146262';
+    private const WHATSAPP_URL = 'https://wa.me/919915018282';
 
     public function __construct(private SettingsService $settings) {}
 
@@ -63,7 +63,7 @@ class CmsPageSeeder extends Seeder
                     <p>From the mehndi night to the doli, we dress the bride, the groom and the whole baraat: party lehengas and anarkalis for mehndi and sangeet, Punjabi suits for shagan and chunni, bridal lehengas for the bride, and sherwanis, safas and juttis for the groom.</p>
                     <h2>Aao ji, visit us</h2>
                     <p>Come to our store for personal styling, trials and fittings for the whole family.</p>
-                    <p>{$address}<br>Phone / WhatsApp: <a href="tel:+918148146262">{$phone}</a></p>
+                    <p>{$address}<br>Phone / WhatsApp: <a href="tel:+919915018282">{$phone}</a></p>
                     HTML,
             ],
             'contact-us' => [
@@ -76,7 +76,7 @@ class CmsPageSeeder extends Seeder
                     <p>{$address}</p>
                     <p><a href="https://www.google.com/maps/search/?api=1&amp;query=22+Katra+Jaimal+Singh+Amritsar+143001" target="_blank" rel="noopener">Get directions on Google Maps</a></p>
                     <h2>Call or WhatsApp</h2>
-                    <p>Phone: <a href="tel:+918148146262">{$phone}</a></p>
+                    <p>Phone: <a href="tel:+919915018282">{$phone}</a></p>
                     <p><a href="{$whatsapp}" target="_blank" rel="noopener">Chat with us on WhatsApp</a> for orders, sizing and alteration questions.</p>
                     <h2>Instagram</h2>
                     <p>See the newest arrivals first: <a href="https://www.instagram.com/ravi.exclusif/" target="_blank" rel="noopener">@ravi.exclusif</a></p>
@@ -97,7 +97,7 @@ class CmsPageSeeder extends Seeder
                     <h2>Cash on delivery</h2>
                     <p>Cash on delivery is available on eligible orders and pin codes.</p>
                     <h2>Questions</h2>
-                    <p>Call or WhatsApp us on <a href="tel:+918148146262">{$phone}</a>.</p>
+                    <p>Call or WhatsApp us on <a href="tel:+919915018282">{$phone}</a>.</p>
                     HTML,
             ],
             'returns-and-exchanges' => [
@@ -141,7 +141,7 @@ class CmsPageSeeder extends Seeder
                     <h2>Who we share it with</h2>
                     <p>We share only what is needed with our payment gateway and courier partners to complete your order. We do not sell your personal information.</p>
                     <h2>Your choices</h2>
-                    <p>You can ask us to update or delete your personal information by contacting us on <a href="tel:+918148146262">{$phone}</a>.</p>
+                    <p>You can ask us to update or delete your personal information by contacting us on <a href="tel:+919915018282">{$phone}</a>.</p>
                     <h2>Contact</h2>
                     <p>{$address}</p>
                     HTML,
