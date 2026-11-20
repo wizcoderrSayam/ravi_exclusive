@@ -26,7 +26,7 @@
           </div>
           <div class="col-12 col-md-6 col-lg-3" data-aos="fade-up" data-aos-delay="300">
             <h4>Contact</h4>
-            <address>M/s Ravi Exclusif<br> 22, Katra Jaimal Singh, Amritsar<br>Amritsar, Punjab, India – 143001<br><a href="tel:+919915018282">Ph: +91 99150 18282</a></address>
+            <address>M/s Ravi Exclusif<br> 22, Katra Jaimal Singh, Amritsar<br>Amritsar, Punjab, India – 143001<br><a href="tel:+918148146262">Ph: +91 8148146262</a></address>
           </div>
         </div>
       </div>
